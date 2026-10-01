@@ -1,10 +1,22 @@
 "use client";
 
 import { useAuth } from "@/context/authContext";
-import { ShieldCheck, LogOut, Database, User, FileText, CheckCircle2 } from "lucide-react";
+import {
+  ShieldCheck,
+  Database,
+  FileText,
+  CheckCircle2,
+  TrendingUp,
+  Clock,
+  AlertTriangle,
+  BarChart3,
+} from "lucide-react";
+import { SidebarProvider, SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
+import { Separator } from "@/components/ui/separator";
+import { AppSidebar } from "@/components/dashboard/app-sidebar";
 
 export default function UserDashboard() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   if (!user) return null;
 
@@ -16,97 +28,157 @@ export default function UserDashboard() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-slate-50 text-slate-900 font-sans">
-      {/* Top Navbar */}
-      <header className="border-b border-slate-200 bg-white/80 backdrop-blur px-6 py-4 flex items-center justify-between shadow-xs">
-        <div className="flex items-center gap-2.5">
-          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold shadow-md shadow-indigo-500/20">
-            Z
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        {/* Top Header Bar */}
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-slate-200 bg-white/80 backdrop-blur px-4 shadow-xs">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-2 h-4" />
+          <div className="flex flex-1 items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-semibold text-slate-900">Dashboard</h1>
+            </div>
+            <div className="hidden sm:flex items-center gap-2 text-xs text-slate-600">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>Connected to Neon DB</span>
+            </div>
           </div>
-          <div>
-            <h1 className="text-base font-bold tracking-tight text-slate-900">Zio Tech GRC</h1>
-            <p className="text-[11px] text-slate-500">Audit & Compliance Platform</p>
+        </header>
+
+        {/* Main Content */}
+        <main className="flex-1 overflow-auto bg-slate-50 p-6">
+          {/* Welcome Card */}
+          <div className="rounded-2xl bg-gradient-to-br from-indigo-900 via-indigo-800 to-purple-900 text-white p-8 sm:p-10 shadow-xl relative overflow-hidden mb-8">
+            {/* Decorative Circles */}
+            <div className="absolute -top-20 -right-20 h-60 w-60 rounded-full bg-white/5" />
+            <div className="absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-white/5" />
+
+            <div className="relative z-10">
+              <div className="flex flex-wrap items-center gap-3 mb-3">
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider border ${
+                    roleColors[user.role] || "bg-white/10 text-white"
+                  }`}
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  {user.role.replace("_", " ")}
+                </span>
+                <span className="text-xs text-indigo-200">
+                  ID: {user.id.slice(0, 8)}...
+                </span>
+              </div>
+
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-2">
+                Welcome back, {user.name}!
+              </h2>
+              <p className="text-sm sm:text-base text-indigo-200 max-w-xl">
+                You are signed in as{" "}
+                <strong className="text-white">{user.email}</strong>. Your
+                session is authenticated and connected to the backend API.
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-4">
-          <div className="hidden sm:flex items-center gap-2 text-xs text-slate-600">
-            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Connected to Neon DB</span>
+          {/* Stats Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Active Audits</span>
+                <div className="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <BarChart3 className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-slate-900">0</p>
+              <p className="text-xs text-slate-400 mt-1">No audits yet</p>
+            </div>
+
+            <div className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Pending Reviews</span>
+                <div className="h-8 w-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <Clock className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-slate-900">0</p>
+              <p className="text-xs text-slate-400 mt-1">All clear</p>
+            </div>
+
+            <div className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Open Issues</span>
+                <div className="h-8 w-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center">
+                  <AlertTriangle className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-slate-900">0</p>
+              <p className="text-xs text-slate-400 mt-1">No issues</p>
+            </div>
+
+            <div className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">Compliance</span>
+                <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <TrendingUp className="h-4 w-4" />
+                </div>
+              </div>
+              <p className="text-2xl font-bold text-slate-900">—</p>
+              <p className="text-xs text-slate-400 mt-1">Start an audit</p>
+            </div>
           </div>
 
-          <button
-            onClick={logout}
-            className="flex items-center gap-2 rounded-lg border border-slate-200 px-3.5 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-red-600 cursor-pointer"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            <span>Sign out</span>
-          </button>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="max-w-5xl mx-auto px-6 py-10">
-        {/* Welcome Card */}
-        <div className="rounded-3xl bg-gradient-to-br from-indigo-900 via-indigo-800 to-purple-900 text-white p-8 sm:p-10 shadow-xl relative overflow-hidden mb-8">
-          <div className="relative z-10">
-            <div className="flex flex-wrap items-center gap-3 mb-3">
-              <span
-                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider border ${
-                  roleColors[user.role] || "bg-white/10 text-white"
-                }`}
-              >
-                <ShieldCheck className="h-3.5 w-3.5" />
-                {user.role.replace("_", " ")}
+          {/* Quick Audit Modules Grid */}
+          <h3 className="text-sm font-semibold text-slate-700 mb-4 uppercase tracking-wide">Quick Access Modules</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div className="rounded-2xl bg-white p-6 border border-slate-200/80 shadow-xs hover:shadow-md hover:border-indigo-200 transition-all duration-200 cursor-pointer group">
+              <div className="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4 group-hover:bg-indigo-100 transition-colors">
+                <FileText className="h-5 w-5" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900 mb-1">
+                Audit Projects
+              </h3>
+              <p className="text-xs text-slate-500 mb-4">
+                Manage audit scopes, guidelines, and TOR parent-child trees.
+              </p>
+              <span className="text-xs font-semibold text-indigo-600 group-hover:underline">
+                Open Module &rarr;
               </span>
-              <span className="text-xs text-indigo-200">ID: {user.id.slice(0, 8)}...</span>
             </div>
 
-            <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight mb-2">
-              Welcome back, {user.name}!
-            </h2>
-            <p className="text-sm sm:text-base text-indigo-200 max-w-xl">
-              You are signed in as <strong className="text-white">{user.email}</strong>. Your session is authenticated and connected to the backend API.
-            </p>
-          </div>
-        </div>
-
-        {/* Quick Audit Modules Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-          <div className="rounded-2xl bg-white p-6 border border-slate-200/80 shadow-xs">
-            <div className="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4">
-              <FileText className="h-5 w-5" />
+            <div className="rounded-2xl bg-white p-6 border border-slate-200/80 shadow-xs hover:shadow-md hover:border-purple-200 transition-all duration-200 cursor-pointer group">
+              <div className="h-10 w-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-4 group-hover:bg-purple-100 transition-colors">
+                <CheckCircle2 className="h-5 w-5" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900 mb-1">
+                DRT Tracker
+              </h3>
+              <p className="text-xs text-slate-500 mb-4">
+                Document requirement tracking, review remarks, and
+                verifications.
+              </p>
+              <span className="text-xs font-semibold text-purple-600 group-hover:underline">
+                Open Module &rarr;
+              </span>
             </div>
-            <h3 className="text-base font-bold text-slate-900 mb-1">Audit Projects</h3>
-            <p className="text-xs text-slate-500 mb-4">
-              Manage audit scopes, guidelines, and TOR parent-child trees.
-            </p>
-            <span className="text-xs font-semibold text-indigo-600">Active Module &rarr;</span>
-          </div>
 
-          <div className="rounded-2xl bg-white p-6 border border-slate-200/80 shadow-xs">
-            <div className="h-10 w-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center mb-4">
-              <CheckCircle2 className="h-5 w-5" />
+            <div className="rounded-2xl bg-white p-6 border border-slate-200/80 shadow-xs hover:shadow-md hover:border-emerald-200 transition-all duration-200 cursor-pointer group">
+              <div className="h-10 w-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4 group-hover:bg-emerald-100 transition-colors">
+                <Database className="h-5 w-5" />
+              </div>
+              <h3 className="text-base font-bold text-slate-900 mb-1">
+                Neon Database
+              </h3>
+              <p className="text-xs text-slate-500 mb-4">
+                Serverless PostgreSQL with SSL and instant automated schema
+                sync.
+              </p>
+              <span className="text-xs font-semibold text-emerald-600">
+                Connected & Verified
+              </span>
             </div>
-            <h3 className="text-base font-bold text-slate-900 mb-1">DRT Tracker</h3>
-            <p className="text-xs text-slate-500 mb-4">
-              Document requirement tracking, review remarks, and verifications.
-            </p>
-            <span className="text-xs font-semibold text-purple-600">Active Module &rarr;</span>
           </div>
-
-          <div className="rounded-2xl bg-white p-6 border border-slate-200/80 shadow-xs">
-            <div className="h-10 w-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4">
-              <Database className="h-5 w-5" />
-            </div>
-            <h3 className="text-base font-bold text-slate-900 mb-1">Neon Database</h3>
-            <p className="text-xs text-slate-500 mb-4">
-              Serverless PostgreSQL with SSL and instant automated schema sync.
-            </p>
-            <span className="text-xs font-semibold text-emerald-600">Connected & Verified</span>
-          </div>
-        </div>
-      </main>
-    </div>
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }
