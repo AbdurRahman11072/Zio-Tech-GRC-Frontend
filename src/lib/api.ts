@@ -368,11 +368,32 @@ export interface TorClause {
   description?: string | null;
   objective?: string | null;
   sortOrder: number;
+  clauseType?: "tor" | "guideline";
   auditProjectId: string;
+  auditProject?: AuditProject;
   parentClauseId?: string | null;
   children?: TorClause[];
   createdAt: string;
   updatedAt: string;
+}
+
+export async function fetchAllTorClauses(
+  token: string,
+  options?: { type?: string; auditProjectId?: string },
+): Promise<TorClause[]> {
+  const params = new URLSearchParams();
+  if (options?.type) params.append("type", options.type);
+  if (options?.auditProjectId)
+    params.append("auditProjectId", options.auditProjectId);
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(`${API_URL}/tor${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to fetch clauses");
+  }
+  return data;
 }
 
 export async function fetchAuditTorTree(
@@ -399,6 +420,7 @@ export async function createTorClause(
     objective?: string;
     parentClauseId?: string;
     sortOrder?: number;
+    clauseType?: string;
   },
 ): Promise<TorClause> {
   const res = await fetch(`${API_URL}/audits/${auditId}/tor`, {
@@ -535,6 +557,7 @@ export interface DrtRequirement {
   status: DrtRequirementStatus;
   dueDate?: string;
   auditProjectId: string;
+  auditProject?: AuditProject;
   torClauseId?: string;
   torClause?: {
     id: string;
@@ -544,6 +567,19 @@ export interface DrtRequirement {
   submissions: DrtSubmission[];
   createdAt: string;
   updatedAt: string;
+}
+
+export async function fetchAllDrtRequirements(
+  token: string,
+): Promise<DrtRequirement[]> {
+  const res = await fetch(`${API_URL}/drt`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to fetch all DRT requirements");
+  }
+  return data;
 }
 
 export async function fetchAuditDrtRequirements(
