@@ -20,10 +20,17 @@ import { Separator } from "@/components/ui/separator";
 import { AppSidebar } from "@/components/dashboard/app-sidebar";
 import CompanyManagement from "@/components/companies/companyManagement";
 import AuditProjects from "@/components/audits/auditProjects";
+import TorManagement from "@/components/tor/torManagement";
 
 export default function UserDashboard() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<string>("Dashboard");
+  const [selectedAuditIdForTor, setSelectedAuditIdForTor] = useState<string | undefined>(undefined);
+
+  const handleNavigateToTor = (auditId: string) => {
+    setSelectedAuditIdForTor(auditId);
+    setActiveTab("TOR Management");
+  };
 
   if (!user) return null;
 
@@ -58,7 +65,9 @@ export default function UserDashboard() {
           {activeTab === "Companies" ? (
             <CompanyManagement />
           ) : activeTab === "Audit Projects" ? (
-            <AuditProjects />
+            <AuditProjects onNavigateToTor={handleNavigateToTor} />
+          ) : activeTab === "TOR Management" || activeTab === "Guidelines" ? (
+            <TorManagement initialAuditId={selectedAuditIdForTor} />
           ) : activeTab === "Dashboard" ? (
             <>
               {/* Welcome Card */}
@@ -152,7 +161,7 @@ export default function UserDashboard() {
               <h3 className="text-sm font-semibold text-slate-700 mb-4 uppercase tracking-wide">
                 Quick Access Modules
               </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div
                   onClick={() => setActiveTab("Companies")}
                   className="rounded-2xl bg-white p-6 border border-slate-200/80 shadow-xs hover:shadow-md hover:border-indigo-300 transition-all duration-200 cursor-pointer group"
@@ -183,9 +192,28 @@ export default function UserDashboard() {
                     Audit Projects
                   </h3>
                   <p className="text-xs text-slate-500 mb-4">
-                    Manage audit scopes, guidelines, and TOR parent-child trees.
+                    Manage audit scopes, frameworks, lifecycle states, and teams.
                   </p>
                   <span className="inline-flex items-center gap-1 text-xs font-semibold text-purple-600 group-hover:underline">
+                    <span>Open Module</span>
+                    <ArrowRight className="h-3 w-3" />
+                  </span>
+                </div>
+
+                <div
+                  onClick={() => setActiveTab("TOR Management")}
+                  className="rounded-2xl bg-white p-6 border border-slate-200/80 shadow-xs hover:shadow-md hover:border-blue-200 transition-all duration-200 cursor-pointer group"
+                >
+                  <div className="h-10 w-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4 group-hover:bg-blue-100 transition-colors">
+                    <FileText className="h-5 w-5" />
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 mb-1">
+                    TOR & Guidelines
+                  </h3>
+                  <p className="text-xs text-slate-500 mb-4">
+                    Hierarchical clause trees, Annex A controls, and 1-click seeder.
+                  </p>
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-600 group-hover:underline">
                     <span>Open Module</span>
                     <ArrowRight className="h-3 w-3" />
                   </span>

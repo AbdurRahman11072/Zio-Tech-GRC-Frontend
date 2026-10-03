@@ -83,7 +83,11 @@ const statusStyles: Record<string, { label: string; color: string }> = {
   },
 };
 
-export default function AuditProjects() {
+interface AuditProjectsProps {
+  onNavigateToTor?: (auditId: string) => void;
+}
+
+export default function AuditProjects({ onNavigateToTor }: AuditProjectsProps = {}) {
   const { token, user } = useAuth();
   const [audits, setAudits] = useState<AuditProject[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -474,10 +478,14 @@ export default function AuditProjects() {
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <span className="text-[11px] text-indigo-600 font-semibold group-hover:underline flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onNavigateToTor?.(audit.id)}
+                    className="text-[11px] text-indigo-600 font-semibold hover:underline flex items-center gap-1 cursor-pointer transition-colors hover:text-indigo-800"
+                  >
                     <span>Manage TOR & DRTs</span>
                     <ExternalLink className="h-3 w-3" />
-                  </span>
+                  </button>
 
                   {user?.role === "admin" && (
                     <button

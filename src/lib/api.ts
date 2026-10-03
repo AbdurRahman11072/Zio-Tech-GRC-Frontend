@@ -361,4 +361,117 @@ export async function deleteAudit(
   return data;
 }
 
+export interface TorClause {
+  id: string;
+  clauseNumber: string;
+  title: string;
+  description?: string | null;
+  objective?: string | null;
+  sortOrder: number;
+  auditProjectId: string;
+  parentClauseId?: string | null;
+  children?: TorClause[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function fetchAuditTorTree(
+  token: string,
+  auditId: string,
+): Promise<TorClause[]> {
+  const res = await fetch(`${API_URL}/audits/${auditId}/tor`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to fetch TOR hierarchy");
+  }
+  return data;
+}
+
+export async function createTorClause(
+  token: string,
+  auditId: string,
+  payload: {
+    clauseNumber: string;
+    title: string;
+    description?: string;
+    objective?: string;
+    parentClauseId?: string;
+    sortOrder?: number;
+  },
+): Promise<TorClause> {
+  const res = await fetch(`${API_URL}/audits/${auditId}/tor`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(data.message)
+      ? data.message.join(", ")
+      : data.message || "Failed to create TOR clause";
+    throw new Error(errorMsg);
+  }
+  return data;
+}
+
+export async function importTorTemplate(
+  token: string,
+  auditId: string,
+  framework: string,
+): Promise<TorClause[]> {
+  const res = await fetch(
+    `${API_URL}/audits/${auditId}/tor/import-template?framework=${encodeURIComponent(framework)}`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    },
+  );
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to import framework template");
+  }
+  return data;
+}
+
+export async function updateTorClause(
+  token: string,
+  id: string,
+  payload: Partial<TorClause>,
+): Promise<TorClause> {
+  const res = await fetch(`${API_URL}/tor/${id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to update TOR clause");
+  }
+  return data;
+}
+
+export async function deleteTorClause(
+  token: string,
+  id: string,
+): Promise<{ message: string }> {
+  const res = await fetch(`${API_URL}/tor/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to delete TOR clause");
+  }
+  return data;
+}
+
+
 
