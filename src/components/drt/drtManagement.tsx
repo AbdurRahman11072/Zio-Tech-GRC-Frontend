@@ -1,0 +1,1016 @@
+"use client";
+
+import { useState, useEffect, useRef, type ChangeEvent } from "react";
+import {
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  UploadCloud,
+  FileText,
+  ShieldCheck,
+  Plus,
+  Search,
+  Filter,
+  Download,
+  MessageSquare,
+  FileCheck,
+  RotateCcw,
+  X,
+  Loader2,
+  Calendar,
+  AlertCircle,
+  Building2,
+  Trash2,
+  ExternalLink,
+  Paperclip,
+} from "lucide-react";
+import { useAuth } from "@/context/authContext";
+import {
+  fetchAudits,
+  fetchAuditDrtRequirements,
+  createDrtRequirement,
+  deleteDrtRequirement,
+  submitDrtEvidence,
+  reviewDrtSubmission,
+  getEvidenceDownloadUrl,
+  fetchAuditTorTree,
+  type AuditProject,
+  type DrtRequirement,
+  type DrtRequirementStatus,
+  type ReviewDecision,
+  type TorClause,
+} from "@/lib/api";
+
+const statusConfig: Record<
+  DrtRequirementStatus,
+  { label: string; badge: string; icon: typeof CheckCircle2 }
+> = {
+  pending: {
+    label: "Pending Evidence",
+    badge: "bg-slate-100 text-slate-700 border-slate-200",
+    icon: Clock,
+  },
+  submitted: {
+    label: "Evidence Submitted",
+    badge: "bg-blue-50 text-blue-700 border-blue-200",
+    icon: UploadCloud,
+  },
+  in_review: {
+    label: "Under Auditor Review",
+    badge: "bg-purple-50 text-purple-700 border-purple-200",
+    icon: ShieldCheck,
+  },
+  approved: {
+    label: "Verified & Approved",
+    badge: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    icon: CheckCircle2,
+  },
+  revision_required: {
+    label: "Revision Requested",
+    badge: "bg-rose-50 text-rose-700 border-rose-200",
+    icon: AlertTriangle,
+  },
+};
+
+interface DrtManagementProps {
+  initialAuditId?: string;
+}
+
+export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
+  const { token, user } = useAuth();
+  const [audits, setAudits] = useState<AuditProject[]>([]);
+  const [selectedAuditId, setSelectedAuditId] = useState<string>(
+    initialAuditId || "",
+  );
+  const [requirements, setRequirements] = useState<DrtRequirement[]>([]);
+  const [clauses, setClauses] = useState<TorClause[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Filters
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+
+  // Add Requirement Modal
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newCode, setNewCode] = useState("");
+  const [newTitle, setNewTitle] = useState("");
+  const [newDesc, setNewDesc] = useState("");
+  const [newGuidance, setNewGuidance] = useState("");
+  const [newMandatory, setNewMandatory] = useState(true);
+  const [newDueDate, setNewDueDate] = useState("");
+  const [newTorClauseId, setNewTorClauseId] = useState("");
+  const [isSubmittingNew, setIsSubmittingNew] = useState(false);
+
+  // Submit Evidence Modal
+  const [evidenceTargetReq, setEvidenceTargetReq] =
+    useState<DrtRequirement | null>(null);
+  const [submitNotes, setSubmitNotes] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Review Modal
+  const [reviewTargetReq, setReviewTargetReq] = useState<DrtRequirement | null>(
+    null,
+  );
+  const [reviewDecision, setReviewDecision] = useState<ReviewDecision>("approved");
+  const [reviewComment, setReviewComment] = useState("");
+  const [isReviewing, setIsReviewing] = useState(false);
+
+  const isAuditorOrAdmin = user?.role === "admin" || user?.role === "auditor";
+
+  // Load audit projects
+  useEffect(() => {
+    if (!token) return;
+    fetchAudits(token)
+      .then((data) => {
+        setAudits(data);
+        if (!selectedAuditId && data.length > 0) {
+          setSelectedAuditId(data[0].id);
+        }
+      })
+      .catch((err) => {
+        setError(err.message || "Failed to load audit projects");
+      });
+  }, [token]);
+
+  // Load DRT items and TOR clauses for selected audit
+  useEffect(() => {
+    if (!token || !selectedAuditId) {
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    setError(null);
+
+    Promise.all([
+      fetchAuditDrtRequirements(token, selectedAuditId),
+      fetchAuditTorTree(token, selectedAuditId).catch(() => []),
+    ])
+      .then(([drtData, torData]) => {
+        setRequirements(drtData);
+        // Flatten TOR clauses for select dropdown
+        const flat: TorClause[] = [];
+        const traverse = (nodes: TorClause[]) => {
+          for (const n of nodes) {
+            flat.push(n);
+            if (n.children && n.children.length > 0) {
+              traverse(n.children);
+            }
+          }
+        };
+        traverse(torData);
+        setClauses(flat);
+      })
+      .catch((err) => {
+        setError(err.message || "Failed to load DRT requirements");
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [token, selectedAuditId]);
+
+  const handleCreateRequirement = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !selectedAuditId) return;
+
+    setIsSubmittingNew(true);
+    try {
+      const created = await createDrtRequirement(token, selectedAuditId, {
+        code: newCode,
+        title: newTitle,
+        description: newDesc || undefined,
+        guidance: newGuidance || undefined,
+        isMandatory: newMandatory,
+        dueDate: newDueDate || undefined,
+        torClauseId: newTorClauseId || undefined,
+      });
+
+      setRequirements((prev) => [...prev, created]);
+      setIsAddModalOpen(false);
+      setNewCode("");
+      setNewTitle("");
+      setNewDesc("");
+      setNewGuidance("");
+      setNewDueDate("");
+      setNewTorClauseId("");
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to create requirement");
+    } finally {
+      setIsSubmittingNew(false);
+    }
+  };
+
+  const handleDeleteRequirement = async (id: string, code: string) => {
+    if (!token) return;
+    if (!confirm(`Are you sure you want to delete requirement "${code}"?`)) return;
+
+    try {
+      await deleteDrtRequirement(token, id);
+      setRequirements((prev) => prev.filter((r) => r.id !== id));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to delete requirement");
+    }
+  };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const filesArray = Array.from(e.target.files);
+      setSelectedFiles((prev) => [...prev, ...filesArray]);
+    }
+  };
+
+  const handleRemoveFile = (index: number) => {
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubmitEvidence = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !evidenceTargetReq) return;
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("notes", submitNotes);
+      selectedFiles.forEach((file) => {
+        formData.append("files", file);
+      });
+
+      const updated = await submitDrtEvidence(
+        token,
+        evidenceTargetReq.id,
+        formData,
+      );
+
+      setRequirements((prev) =>
+        prev.map((r) => (r.id === updated.id ? updated : r)),
+      );
+      setEvidenceTargetReq(null);
+      setSubmitNotes("");
+      setSelectedFiles([]);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to upload evidence");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleSubmitReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !reviewTargetReq) return;
+    if (!reviewComment.trim()) {
+      alert("Please provide an evaluation remark for the auditee.");
+      return;
+    }
+
+    setIsReviewing(true);
+    try {
+      const updated = await reviewDrtSubmission(
+        token,
+        reviewTargetReq.id,
+        reviewDecision,
+        reviewComment,
+      );
+
+      setRequirements((prev) =>
+        prev.map((r) => (r.id === updated.id ? updated : r)),
+      );
+      setReviewTargetReq(null);
+      setReviewComment("");
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to submit review");
+    } finally {
+      setIsReviewing(false);
+    }
+  };
+
+  const filteredRequirements = requirements.filter((req) => {
+    const matchesSearch =
+      req.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      req.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (req.torClause?.title &&
+        req.torClause.title.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    const matchesStatus =
+      statusFilter === "all" || req.status === statusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
+
+  // Calculate Metrics
+  const totalCount = requirements.length;
+  const approvedCount = requirements.filter((r) => r.status === "approved").length;
+  const submittedCount = requirements.filter(
+    (r) => r.status === "submitted" || r.status === "in_review",
+  ).length;
+  const pendingCount = requirements.filter((r) => r.status === "pending").length;
+  const revisionCount = requirements.filter(
+    (r) => r.status === "revision_required",
+  ).length;
+  const complianceRate =
+    totalCount > 0 ? Math.round((approvedCount / totalCount) * 100) : 0;
+
+  const currentAudit = audits.find((a) => a.id === selectedAuditId);
+
+  return (
+    <div className="space-y-6">
+      {/* Top Header Bar */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+            Document Requirement Tracking (DRT)
+          </h2>
+          <p className="text-xs sm:text-sm text-slate-500">
+            Secure evidence vault, document lifecycle tracker, and auditor verification engine.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Audit Selector */}
+          <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-xs">
+            <Building2 className="h-4 w-4 text-slate-400" />
+            <select
+              value={selectedAuditId}
+              onChange={(e) => setSelectedAuditId(e.target.value)}
+              className="text-xs font-semibold text-slate-800 bg-transparent outline-none cursor-pointer"
+            >
+              {audits.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.code} — {a.title}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {isAuditorOrAdmin && (
+            <button
+              type="button"
+              onClick={() => setIsAddModalOpen(true)}
+              className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs sm:text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+              <span>New Requirement</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Metrics Row */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+          <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+            Total DRT Items
+          </span>
+          <p className="text-2xl font-bold text-slate-900 mt-1">{totalCount}</p>
+          <span className="text-[11px] text-slate-400">Target artifacts</span>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+          <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+            Pending Evidence
+          </span>
+          <p className="text-2xl font-bold text-slate-700 mt-1">{pendingCount}</p>
+          <span className="text-[11px] text-amber-600">Awaiting auditee upload</span>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+          <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+            Under Review
+          </span>
+          <p className="text-2xl font-bold text-blue-600 mt-1">{submittedCount}</p>
+          <span className="text-[11px] text-blue-500">Ready for auditor sign-off</span>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+          <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+            Revisions Required
+          </span>
+          <p className="text-2xl font-bold text-rose-600 mt-1">{revisionCount}</p>
+          <span className="text-[11px] text-rose-500">Changes requested</span>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+          <span className="text-xs font-medium text-slate-500 uppercase tracking-wider">
+            Verification Rate
+          </span>
+          <p className="text-2xl font-bold text-emerald-600 mt-1">{complianceRate}%</p>
+          <span className="text-[11px] text-emerald-600 font-medium">
+            {approvedCount} / {totalCount} verified
+          </span>
+        </div>
+      </div>
+
+      {/* Filter and Search Bar */}
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+        <div className="relative w-full sm:w-80">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search DRT code, title, or clause..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+          <Filter className="h-4 w-4 text-slate-400 shrink-0" />
+          {[
+            { id: "all", label: "All Items" },
+            { id: "pending", label: "Pending" },
+            { id: "submitted", label: "Submitted" },
+            { id: "approved", label: "Approved" },
+            { id: "revision_required", label: "Revision" },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setStatusFilter(tab.id)}
+              className={`rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors ${
+                statusFilter === tab.id
+                  ? "bg-indigo-600 text-white shadow-xs"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Main Requirement List */}
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-slate-200">
+          <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mb-2" />
+          <p className="text-xs text-slate-500">Loading evidence requirements...</p>
+        </div>
+      ) : error ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-600 flex items-center gap-3">
+          <AlertCircle className="h-5 w-5 shrink-0 text-red-500" />
+          <span>{error}</span>
+        </div>
+      ) : filteredRequirements.length === 0 ? (
+        <div className="text-center py-16 px-4 bg-white rounded-2xl border border-dashed border-slate-300">
+          <div className="mx-auto h-12 w-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3">
+            <FileText className="h-6 w-6" />
+          </div>
+          <h3 className="text-base font-bold text-slate-900">
+            No DRT Requirements Found
+          </h3>
+          <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
+            {searchQuery
+              ? "No requirements match your search filter."
+              : "Define document requirements and evidence deliverables for this audit."}
+          </p>
+          {isAuditorOrAdmin && (
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Create First Requirement</span>
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filteredRequirements.map((req) => {
+            const st = statusConfig[req.status] || statusConfig.pending;
+            const StatusIcon = st.icon;
+            const latestSub = req.submissions && req.submissions.length > 0
+              ? req.submissions.sort((a, b) => b.version - a.version)[0]
+              : null;
+            const latestRemark = latestSub?.reviewRemarks && latestSub.reviewRemarks.length > 0
+              ? latestSub.reviewRemarks[latestSub.reviewRemarks.length - 1]
+              : null;
+
+            return (
+              <div
+                key={req.id}
+                className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs hover:border-slate-300 transition-all space-y-4"
+              >
+                {/* Header row */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <span className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md border border-indigo-100">
+                      {req.code}
+                    </span>
+
+                    {req.torClause && (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-purple-50 px-2 py-0.5 text-[11px] font-medium text-purple-700 border border-purple-200">
+                        <ShieldCheck className="h-3 w-3" />
+                        <span>Clause {req.torClause.clauseNumber}</span>
+                      </span>
+                    )}
+
+                    {req.isMandatory && (
+                      <span className="rounded-md bg-rose-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rose-700 border border-rose-200">
+                        Mandatory
+                      </span>
+                    )}
+
+                    {req.dueDate && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-slate-500">
+                        <Calendar className="h-3 w-3 text-slate-400" />
+                        <span>Due: {new Date(req.dueDate).toLocaleDateString()}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold border ${st.badge}`}
+                    >
+                      <StatusIcon className="h-3.5 w-3.5" />
+                      <span>{st.label}</span>
+                    </span>
+
+                    {isAuditorOrAdmin && (
+                      <button
+                        onClick={() => handleDeleteRequirement(req.id, req.code)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                        title="Delete Requirement"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Title & Guidance */}
+                <div>
+                  <h4 className="text-base font-bold text-slate-900 mb-1">
+                    {req.title}
+                  </h4>
+                  {req.description && (
+                    <p className="text-xs text-slate-600 mb-2">
+                      {req.description}
+                    </p>
+                  )}
+                  {req.guidance && (
+                    <div className="rounded-xl bg-slate-50 border border-slate-200/80 p-3 text-xs text-slate-600 flex items-start gap-2">
+                      <FileCheck className="h-4 w-4 text-indigo-500 shrink-0 mt-0.5" />
+                      <div>
+                        <strong className="text-slate-700">Auditor Guidance:</strong>{" "}
+                        {req.guidance}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Evidence Artifacts Section */}
+                {latestSub && (
+                  <div className="pt-3 border-t border-slate-100 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-700">
+                          Submission v{latestSub.version}
+                        </span>
+                        <span>•</span>
+                        <span>
+                          By {latestSub.submittedBy?.name || "Auditee"} on{" "}
+                          {new Date(latestSub.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {latestSub.notes && (
+                      <p className="text-xs text-slate-600 italic bg-white p-2 rounded-lg border border-slate-100">
+                        &quot;{latestSub.notes}&quot;
+                      </p>
+                    )}
+
+                    {latestSub.evidenceFiles && latestSub.evidenceFiles.length > 0 && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                        {latestSub.evidenceFiles.map((f) => (
+                          <a
+                            key={f.id}
+                            href={getEvidenceDownloadUrl(f.id)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 text-xs hover:bg-indigo-50 hover:border-indigo-200 transition-colors group"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Paperclip className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                              <span className="truncate font-medium text-slate-800 group-hover:text-indigo-600">
+                                {f.originalName}
+                              </span>
+                            </div>
+                            <Download className="h-3.5 w-3.5 text-slate-400 group-hover:text-indigo-600 shrink-0" />
+                          </a>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Auditor Feedback Callout */}
+                    {latestRemark && (
+                      <div
+                        className={`rounded-xl p-3 border text-xs flex items-start gap-2.5 ${
+                          latestRemark.decision === "approved"
+                            ? "bg-emerald-50/80 border-emerald-200 text-emerald-800"
+                            : "bg-rose-50/80 border-rose-200 text-rose-800"
+                        }`}
+                      >
+                        <MessageSquare className="h-4 w-4 shrink-0 mt-0.5" />
+                        <div>
+                          <div className="font-bold flex items-center gap-2 mb-0.5">
+                            <span>
+                              Auditor Finding ({latestRemark.reviewer?.name || "Auditor"})
+                            </span>
+                            <span className="text-[10px] uppercase tracking-wider font-extrabold px-1.5 py-0.2 rounded bg-white/60">
+                              {latestRemark.decision.replace("_", " ")}
+                            </span>
+                          </div>
+                          <p>{latestRemark.comment}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Action Buttons Footer */}
+                <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEvidenceTargetReq(req);
+                      setSubmitNotes("");
+                      setSelectedFiles([]);
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-colors"
+                  >
+                    <UploadCloud className="h-3.5 w-3.5 text-slate-600" />
+                    <span>
+                      {req.submissions?.length ? "Upload New Version" : "Upload Evidence"}
+                    </span>
+                  </button>
+
+                  {isAuditorOrAdmin && latestSub && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setReviewTargetReq(req);
+                        setReviewDecision("approved");
+                        setReviewComment("");
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 transition-colors shadow-xs"
+                    >
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      <span>Review & Sign-Off</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 1. Modal: Submit / Upload Evidence */}
+      {evidenceTargetReq && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">
+                  Upload Evidence Artifacts
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Deliver compliance proof for <strong>{evidenceTargetReq.code}</strong>
+                </p>
+              </div>
+              <button
+                onClick={() => setEvidenceTargetReq(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitEvidence} className="space-y-4">
+              {/* File Dropzone */}
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-indigo-200 rounded-2xl bg-indigo-50/30 hover:bg-indigo-50/60 cursor-pointer transition-colors text-center"
+              >
+                <UploadCloud className="h-8 w-8 text-indigo-600 mb-2" />
+                <p className="text-xs font-semibold text-slate-800">
+                  Click to browse or drag and drop evidence files
+                </p>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  PDF, DOCX, XLSX, PNG, JPG, CSV, ZIP (Max 25MB each)
+                </p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+              </div>
+
+              {/* Selected Files Preview */}
+              {selectedFiles.length > 0 && (
+                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                  <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                    Selected Files ({selectedFiles.length})
+                  </span>
+                  {selectedFiles.map((file, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between gap-2 rounded-xl bg-slate-50 p-2 text-xs border border-slate-200"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <Paperclip className="h-3.5 w-3.5 text-indigo-600 shrink-0" />
+                        <span className="truncate font-medium">{file.name}</span>
+                        <span className="text-[10px] text-slate-400">
+                          ({(file.size / 1024 / 1024).toFixed(2)} MB)
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveFile(idx)}
+                        className="text-slate-400 hover:text-red-600 p-1"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Notes Field */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Submission Notes & Context
+                </label>
+                <textarea
+                  rows={3}
+                  value={submitNotes}
+                  onChange={(e) => setSubmitNotes(e.target.value)}
+                  placeholder="Explain how these files satisfy the requirement..."
+                  className="w-full rounded-xl border border-slate-200 p-3 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEvidenceTargetReq(null)}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUploading || selectedFiles.length === 0}
+                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {isUploading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  <span>{isUploading ? "Uploading..." : "Submit Evidence"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Modal: Review & Sign-Off (Auditor) */}
+      {reviewTargetReq && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">
+                  Auditor Evaluation & Sign-Off
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Requirement: <strong>{reviewTargetReq.code}</strong> — {reviewTargetReq.title}
+                </p>
+              </div>
+              <button
+                onClick={() => setReviewTargetReq(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitReview} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-2">
+                  Verification Decision
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setReviewDecision("approved")}
+                    className={`flex items-center justify-center gap-2 rounded-xl p-3 border text-xs font-semibold transition-all ${
+                      reviewDecision === "approved"
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-700 ring-2 ring-emerald-200"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    <span>Approve & Verify</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setReviewDecision("revision_required")}
+                    className={`flex items-center justify-center gap-2 rounded-xl p-3 border text-xs font-semibold transition-all ${
+                      reviewDecision === "revision_required"
+                        ? "border-rose-500 bg-rose-50 text-rose-700 ring-2 ring-rose-200"
+                        : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    <AlertTriangle className="h-4 w-4 text-rose-600" />
+                    <span>Request Revision</span>
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Auditor Findings & Remark <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  placeholder="Document your objective evidence findings, gap analysis, or approval rationale..."
+                  className="w-full rounded-xl border border-slate-200 p-3 text-xs focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setReviewTargetReq(null)}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isReviewing}
+                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {isReviewing && <Loader2 className="h-4 w-4 animate-spin" />}
+                  <span>Confirm Sign-Off</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Modal: Add DRT Requirement */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+              <div>
+                <h3 className="text-lg font-bold text-slate-900">
+                  Create Document Requirement (DRT)
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Target Project: <strong>{currentAudit?.title}</strong>
+                </p>
+              </div>
+              <button
+                onClick={() => setIsAddModalOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateRequirement} className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Requirement Code <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. DRT-001"
+                    value={newCode}
+                    onChange={(e) => setNewCode(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-mono focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Due Date
+                  </label>
+                  <input
+                    type="date"
+                    value={newDueDate}
+                    onChange={(e) => setNewDueDate(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Deliverable Title <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Annual Cloud Penetration Test Report"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Map to TOR Clause (Optional)
+                </label>
+                <select
+                  value={newTorClauseId}
+                  onChange={(e) => setNewTorClauseId(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs bg-white focus:border-indigo-500 focus:outline-none"
+                >
+                  <option value="">-- No Clause Linked --</option>
+                  {clauses.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.clauseNumber}: {c.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Description & Scope
+                </label>
+                <textarea
+                  rows={2}
+                  value={newDesc}
+                  onChange={(e) => setNewDesc(e.target.value)}
+                  placeholder="Detail the exact artifact required..."
+                  className="w-full rounded-xl border border-slate-200 p-2 text-xs focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Auditor Guidance for Acceptance
+                </label>
+                <textarea
+                  rows={2}
+                  value={newGuidance}
+                  onChange={(e) => setNewGuidance(e.target.value)}
+                  placeholder="e.g. Must be signed by executive management within past 12 months..."
+                  className="w-full rounded-xl border border-slate-200 p-2 text-xs focus:border-indigo-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="mandatoryCheck"
+                  checked={newMandatory}
+                  onChange={(e) => setNewMandatory(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <label
+                  htmlFor="mandatoryCheck"
+                  className="text-xs font-semibold text-slate-700 cursor-pointer"
+                >
+                  Mandatory for Audit Certification
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingNew || !newCode || !newTitle}
+                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {isSubmittingNew && <Loader2 className="h-4 w-4 animate-spin" />}
+                  <span>Create Requirement</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -21,6 +21,7 @@ import { AppSidebar } from "@/components/dashboard/app-sidebar";
 import CompanyManagement from "@/components/companies/companyManagement";
 import AuditProjects from "@/components/audits/auditProjects";
 import TorManagement from "@/components/tor/torManagement";
+import DrtManagement from "@/components/drt/drtManagement";
 
 export default function UserDashboard() {
   const { user } = useAuth();
@@ -68,6 +69,8 @@ export default function UserDashboard() {
             <AuditProjects onNavigateToTor={handleNavigateToTor} />
           ) : activeTab === "TOR Management" || activeTab === "Guidelines" ? (
             <TorManagement initialAuditId={selectedAuditIdForTor} />
+          ) : activeTab === "DRT Tracker" ? (
+            <DrtManagement initialAuditId={selectedAuditIdForTor} />
           ) : activeTab === "Dashboard" ? (
             <>
               {/* Welcome Card */}

@@ -473,5 +473,208 @@ export async function deleteTorClause(
   return data;
 }
 
+export type DrtRequirementStatus =
+  | "pending"
+  | "submitted"
+  | "in_review"
+  | "approved"
+  | "revision_required";
+
+export type ReviewDecision = "approved" | "revision_required" | "comment";
+
+export interface EvidenceFile {
+  id: string;
+  submissionId: string;
+  filename: string;
+  originalName: string;
+  mimeType: string;
+  size: number;
+  filePath: string;
+  createdAt: string;
+}
+
+export interface ReviewRemark {
+  id: string;
+  submissionId: string;
+  reviewerId: string;
+  reviewer?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  decision: ReviewDecision;
+  comment: string;
+  createdAt: string;
+}
+
+export interface DrtSubmission {
+  id: string;
+  requirementId: string;
+  submittedById: string;
+  submittedBy?: {
+    id: string;
+    name: string;
+    email: string;
+  };
+  notes?: string;
+  version: number;
+  status: DrtRequirementStatus;
+  evidenceFiles: EvidenceFile[];
+  reviewRemarks: ReviewRemark[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DrtRequirement {
+  id: string;
+  code: string;
+  title: string;
+  description?: string;
+  guidance?: string;
+  isMandatory: boolean;
+  status: DrtRequirementStatus;
+  dueDate?: string;
+  auditProjectId: string;
+  torClauseId?: string;
+  torClause?: {
+    id: string;
+    clauseNumber: string;
+    title: string;
+  };
+  submissions: DrtSubmission[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function fetchAuditDrtRequirements(
+  token: string,
+  auditId: string,
+): Promise<DrtRequirement[]> {
+  const res = await fetch(`${API_URL}/audits/${auditId}/drt`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to fetch DRT requirements");
+  }
+  return data;
+}
+
+export async function createDrtRequirement(
+  token: string,
+  auditId: string,
+  payload: {
+    code: string;
+    title: string;
+    description?: string;
+    guidance?: string;
+    isMandatory?: boolean;
+    dueDate?: string;
+    torClauseId?: string;
+  },
+): Promise<DrtRequirement> {
+  const res = await fetch(`${API_URL}/audits/${auditId}/drt`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(data.message)
+      ? data.message.join(", ")
+      : data.message || "Failed to create DRT requirement";
+    throw new Error(errorMsg);
+  }
+  return data;
+}
+
+export async function updateDrtRequirement(
+  token: string,
+  id: string,
+  payload: Partial<DrtRequirement>,
+): Promise<DrtRequirement> {
+  const res = await fetch(`${API_URL}/drt/${id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to update DRT requirement");
+  }
+  return data;
+}
+
+export async function deleteDrtRequirement(
+  token: string,
+  id: string,
+): Promise<{ message: string }> {
+  const res = await fetch(`${API_URL}/drt/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to delete DRT requirement");
+  }
+  return data;
+}
+
+export async function submitDrtEvidence(
+  token: string,
+  requirementId: string,
+  formData: FormData,
+): Promise<DrtRequirement> {
+  const res = await fetch(`${API_URL}/drt/${requirementId}/submit`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(data.message)
+      ? data.message.join(", ")
+      : data.message || "Failed to submit evidence";
+    throw new Error(errorMsg);
+  }
+  return data;
+}
+
+export async function reviewDrtSubmission(
+  token: string,
+  requirementId: string,
+  decision: ReviewDecision,
+  comment: string,
+): Promise<DrtRequirement> {
+  const res = await fetch(`${API_URL}/drt/${requirementId}/review`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ decision, comment }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(data.message)
+      ? data.message.join(", ")
+      : data.message || "Failed to submit review";
+    throw new Error(errorMsg);
+  }
+  return data;
+}
+
+export function getEvidenceDownloadUrl(fileId: string): string {
+  return `${API_URL}/evidence/${fileId}/download`;
+}
+
 
 
