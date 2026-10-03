@@ -112,3 +112,253 @@ export async function fetchUserProfile(token: string): Promise<UserProfile> {
 
   return data.user;
 }
+
+export interface Company {
+  id: string;
+  name: string;
+  registrationNumber?: string | null;
+  industry?: string | null;
+  domain?: string | null;
+  logoUrl?: string | null;
+  status: "active" | "pending_review" | "inactive";
+  address?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
+  users?: UserProfile[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function fetchCompanies(token: string): Promise<Company[]> {
+  const res = await fetch(`${API_URL}/companies`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to fetch companies");
+  }
+  return data;
+}
+
+export async function fetchCompanyById(
+  token: string,
+  id: string,
+): Promise<Company> {
+  const res = await fetch(`${API_URL}/companies/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to fetch company details");
+  }
+  return data;
+}
+
+export async function createCompany(
+  token: string,
+  payload: {
+    name: string;
+    registrationNumber?: string;
+    industry?: string;
+    domain?: string;
+    status?: "active" | "pending_review" | "inactive";
+    address?: string;
+    contactEmail?: string;
+    contactPhone?: string;
+  },
+): Promise<Company> {
+  const res = await fetch(`${API_URL}/companies`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(data.message)
+      ? data.message.join(", ")
+      : data.message || "Failed to create company";
+    throw new Error(errorMsg);
+  }
+  return data;
+}
+
+export async function updateCompany(
+  token: string,
+  id: string,
+  payload: Partial<Company>,
+): Promise<Company> {
+  const res = await fetch(`${API_URL}/companies/${id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(data.message)
+      ? data.message.join(", ")
+      : data.message || "Failed to update company";
+    throw new Error(errorMsg);
+  }
+  return data;
+}
+
+export async function deleteCompany(
+  token: string,
+  id: string,
+): Promise<{ message: string }> {
+  const res = await fetch(`${API_URL}/companies/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to delete company");
+  }
+  return data;
+}
+
+export async function fetchUsers(token: string): Promise<UserProfile[]> {
+  const res = await fetch(`${API_URL}/users`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to fetch users");
+  }
+  return data;
+}
+
+export interface AuditProject {
+  id: string;
+  code: string;
+  title: string;
+  description?: string | null;
+  framework:
+    | "ISO_27001"
+    | "SOC_2_TYPE_2"
+    | "NIST_CSF"
+    | "PCI_DSS"
+    | "HIPAA"
+    | "CUSTOM";
+  status:
+    | "draft"
+    | "active"
+    | "fieldwork"
+    | "in_review"
+    | "completed"
+    | "archived";
+  scope?: string | null;
+  startDate?: string | null;
+  targetDate?: string | null;
+  completedDate?: string | null;
+  companyId: string;
+  company?: Company;
+  leadAuditorId?: string | null;
+  leadAuditor?: UserProfile | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function fetchAudits(token: string): Promise<AuditProject[]> {
+  const res = await fetch(`${API_URL}/audits`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to fetch audit projects");
+  }
+  return data;
+}
+
+export async function fetchAuditById(
+  token: string,
+  id: string,
+): Promise<AuditProject> {
+  const res = await fetch(`${API_URL}/audits/${id}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to fetch audit details");
+  }
+  return data;
+}
+
+export async function createAudit(
+  token: string,
+  payload: {
+    title: string;
+    code?: string;
+    description?: string;
+    framework?: string;
+    status?: string;
+    scope?: string;
+    startDate?: string;
+    targetDate?: string;
+    companyId: string;
+    leadAuditorId?: string;
+  },
+): Promise<AuditProject> {
+  const res = await fetch(`${API_URL}/audits`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(data.message)
+      ? data.message.join(", ")
+      : data.message || "Failed to create audit project";
+    throw new Error(errorMsg);
+  }
+  return data;
+}
+
+export async function updateAudit(
+  token: string,
+  id: string,
+  payload: Partial<AuditProject>,
+): Promise<AuditProject> {
+  const res = await fetch(`${API_URL}/audits/${id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(data.message)
+      ? data.message.join(", ")
+      : data.message || "Failed to update audit project";
+    throw new Error(errorMsg);
+  }
+  return data;
+}
+
+export async function deleteAudit(
+  token: string,
+  id: string,
+): Promise<{ message: string }> {
+  const res = await fetch(`${API_URL}/audits/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to delete audit project");
+  }
+  return data;
+}
+
+

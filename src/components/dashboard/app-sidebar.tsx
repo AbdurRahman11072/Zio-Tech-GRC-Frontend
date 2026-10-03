@@ -78,7 +78,15 @@ const managementItems = [
   },
 ];
 
-export function AppSidebar() {
+interface AppSidebarProps {
+  activeTab?: string;
+  onSelectTab?: (tab: string) => void;
+}
+
+export function AppSidebar({
+  activeTab = "Dashboard",
+  onSelectTab,
+}: AppSidebarProps) {
   const { user, logout } = useAuth();
 
   const roleColors: Record<string, string> = {
@@ -95,7 +103,8 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              onClick={() => onSelectTab?.("Dashboard")}
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground cursor-pointer"
             >
               <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-white font-bold text-sm shadow-md shadow-indigo-500/20">
                 Z
@@ -123,7 +132,9 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     tooltip={item.title}
-                    isActive={item.isActive}
+                    isActive={activeTab === item.title}
+                    onClick={() => onSelectTab?.(item.title)}
+                    className="cursor-pointer"
                   >
                     <item.icon />
                     <span>{item.title}</span>
@@ -141,7 +152,12 @@ export function AppSidebar() {
             <SidebarMenu>
               {auditItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton tooltip={item.title}>
+                  <SidebarMenuButton
+                    tooltip={item.title}
+                    isActive={activeTab === item.title}
+                    onClick={() => onSelectTab?.(item.title)}
+                    className="cursor-pointer"
+                  >
                     <item.icon />
                     <span>{item.title}</span>
                   </SidebarMenuButton>
@@ -158,7 +174,12 @@ export function AppSidebar() {
             <SidebarMenu>
               {managementItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton tooltip={item.title}>
+                  <SidebarMenuButton
+                    tooltip={item.title}
+                    isActive={activeTab === item.title}
+                    onClick={() => onSelectTab?.(item.title)}
+                    className="cursor-pointer"
+                  >
                     <item.icon />
                     <span>{item.title}</span>
                   </SidebarMenuButton>
