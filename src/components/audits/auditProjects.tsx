@@ -21,6 +21,7 @@ import {
   BookOpen,
   Users,
   UserPlus,
+  UploadCloud,
 } from "lucide-react";
 import { useAuth } from "@/context/authContext";
 import SubscriptionModal from "@/components/subscription/subscriptionModal";
@@ -90,9 +91,13 @@ const statusStyles: Record<string, { label: string; color: string }> = {
 
 interface AuditProjectsProps {
   onNavigateToTor?: (auditId: string) => void;
+  onNavigateToDrt?: (auditId: string) => void;
 }
 
-export default function AuditProjects({ onNavigateToTor }: AuditProjectsProps = {}) {
+export default function AuditProjects({
+  onNavigateToTor,
+  onNavigateToDrt,
+}: AuditProjectsProps = {}) {
   const { token, user } = useAuth();
   const [audits, setAudits] = useState<AuditProject[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -492,14 +497,34 @@ export default function AuditProjects({ onNavigateToTor }: AuditProjectsProps = 
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <button
-                    type="button"
-                    onClick={() => onNavigateToTor?.(audit.id)}
-                    className="text-[11px] text-indigo-600 font-semibold hover:underline flex items-center gap-1 cursor-pointer transition-colors hover:text-indigo-800"
-                  >
-                    <span>Manage TOR & DRTs</span>
-                    <ExternalLink className="h-3 w-3" />
-                  </button>
+                  {user?.role === "company_user" ? (
+                    <button
+                      type="button"
+                      onClick={() => (onNavigateToDrt || onNavigateToTor)?.(audit.id)}
+                      className="text-[11px] text-indigo-600 font-semibold hover:underline flex items-center gap-1 cursor-pointer transition-colors hover:text-indigo-800"
+                    >
+                      <UploadCloud className="h-3.5 w-3.5" />
+                      <span>Upload Evidence (DRT)</span>
+                    </button>
+                  ) : user?.role === "auditee" ? (
+                    <button
+                      type="button"
+                      onClick={() => (onNavigateToDrt || onNavigateToTor)?.(audit.id)}
+                      className="text-[11px] text-indigo-600 font-semibold hover:underline flex items-center gap-1 cursor-pointer transition-colors hover:text-indigo-800"
+                    >
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                      <span>Verification Tasks (DRT)</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onNavigateToTor?.(audit.id)}
+                      className="text-[11px] text-indigo-600 font-semibold hover:underline flex items-center gap-1 cursor-pointer transition-colors hover:text-indigo-800"
+                    >
+                      <span>Manage TOR & DRTs</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </button>
+                  )}
 
                   {user?.role === "admin" && (
                     <button

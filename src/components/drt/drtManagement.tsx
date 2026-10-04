@@ -507,18 +507,20 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
             </button>
           )}
 
-          <button
-            type="button"
-            onClick={handleSyncTor}
-            disabled={isSyncingTor}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-xs"
-            title="Sync newly added TOR leaf clauses into DRT requirements"
-          >
-            <RefreshCw
-              className={`h-3.5 w-3.5 text-slate-500 ${isSyncingTor ? "animate-spin" : ""}`}
-            />
-            <span className="hidden sm:inline">Sync TOR</span>
-          </button>
+          {isAuditorOrAdmin && (
+            <button
+              type="button"
+              onClick={handleSyncTor}
+              disabled={isSyncingTor}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-xs"
+              title="Sync newly added TOR leaf clauses into DRT requirements"
+            >
+              <RefreshCw
+                className={`h-3.5 w-3.5 text-slate-500 ${isSyncingTor ? "animate-spin" : ""}`}
+              />
+              <span className="hidden sm:inline">Sync TOR</span>
+            </button>
+          )}
 
           {isAuditorOrAdmin && (
             <button
@@ -705,20 +707,44 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
               </div>
             </div>
 
-            {/* Primary Action Button */}
-            <button
-              type="button"
-              onClick={() => setIsSubmitAllModalOpen(true)}
-              disabled={isSubmittingAll || totalCount === 0}
-              className={`inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-xs sm:text-sm font-bold shadow-md transition-all ${
-                uploadPct === 100
-                  ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-500/20 hover:scale-[1.02]"
-                  : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/20"
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              <Send className="h-4 w-4" />
-              <span>Submit All Evidence</span>
-            </button>
+            {/* Primary Action Button: Role-Specific */}
+            {(user?.role === "company_user" || user?.role === "admin") && (
+              <button
+                type="button"
+                onClick={() => setIsSubmitAllModalOpen(true)}
+                disabled={isSubmittingAll || totalCount === 0}
+                className={`inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-xs sm:text-sm font-bold shadow-md transition-all ${
+                  uploadPct === 100
+                    ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-emerald-500/20 hover:scale-[1.02]"
+                    : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-500/20"
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                <Send className="h-4 w-4" />
+                <span>Submit Evidence to Auditor</span>
+              </button>
+            )}
+
+            {user?.role === "auditee" && (
+              <button
+                type="button"
+                onClick={() => setStatusFilter("assigned_to_me")}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-xs sm:text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-500/20 transition-all cursor-pointer"
+              >
+                <UserCheck className="h-4 w-4" />
+                <span>My Assigned Items ({assignedToMeCount})</span>
+              </button>
+            )}
+
+            {user?.role === "auditor" && currentAudit && (
+              <button
+                type="button"
+                onClick={() => setIsDistributionModalOpen(true)}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl px-5 py-3.5 text-xs sm:text-sm font-bold bg-indigo-600 text-white hover:bg-indigo-700 shadow-md shadow-indigo-500/20 transition-all cursor-pointer"
+              >
+                <Users className="h-4 w-4" />
+                <span>Distribute Tasks</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -860,7 +886,11 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
             const hasUploadedFiles =
               latestSub?.evidenceFiles && latestSub.evidenceFiles.length > 0;
 
-            const canReview = isAuditorOrAdmin || user?.role === "auditee";
+            const canUpload = user?.role === "company_user" || user?.role === "admin";
+            const canReview =
+              isAuditorOrAdmin ||
+              (user?.role === "auditee" &&
+                (!req.assignedAuditeeId || req.assignedAuditeeId === user?.id));
 
             return (
               <div
@@ -1025,24 +1055,26 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
 
                 {/* Action Buttons Footer */}
                 <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEvidenceTargetReq(req);
-                      setSubmitNotes("");
-                      setSelectedFiles([]);
-                    }}
-                    className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-colors ${
-                      hasUploadedFiles
-                        ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                        : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-xs"
-                    }`}
-                  >
-                    <UploadCloud className="h-3.5 w-3.5" />
-                    <span>
-                      {hasUploadedFiles ? "Upload New Version" : "Upload Evidence"}
-                    </span>
-                  </button>
+                  {canUpload && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEvidenceTargetReq(req);
+                        setSubmitNotes("");
+                        setSelectedFiles([]);
+                      }}
+                      className={`inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-semibold transition-colors ${
+                        hasUploadedFiles
+                          ? "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                          : "bg-indigo-600 text-white hover:bg-indigo-700 shadow-xs"
+                      }`}
+                    >
+                      <UploadCloud className="h-3.5 w-3.5" />
+                      <span>
+                        {hasUploadedFiles ? "Upload New Version" : "Upload Evidence"}
+                      </span>
+                    </button>
+                  )}
 
                   {/* Phase 6 Auditee / Auditor Review Action */}
                   {canReview && latestSub && (

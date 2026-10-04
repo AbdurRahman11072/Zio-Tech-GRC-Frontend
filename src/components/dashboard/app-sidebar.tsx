@@ -92,13 +92,77 @@ export function AppSidebar({
   onSelectTab,
 }: AppSidebarProps) {
   const { user, logout } = useAuth();
+  const role = user?.role || "company_user";
 
   const roleColors: Record<string, string> = {
-    admin: "bg-red-500/10 text-red-400",
-    auditor: "bg-purple-500/10 text-purple-400",
-    auditee: "bg-blue-500/10 text-blue-400",
-    company_user: "bg-emerald-500/10 text-emerald-400",
+    admin: "bg-red-500/10 text-red-400 border border-red-500/20",
+    auditor: "bg-purple-500/10 text-purple-400 border border-purple-500/20",
+    auditee: "bg-blue-500/10 text-blue-400 border border-blue-500/20",
+    company_user: "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20",
   };
+
+  // 1. Platform Items (Universal)
+  const platformItems = [
+    {
+      title: "Dashboard",
+      icon: LayoutDashboard,
+    },
+    {
+      title: "Notifications",
+      icon: Bell,
+    },
+  ];
+
+  // 2. Audit & Operations Section (Tailored by Role)
+  let auditGroupLabel = "Audit Engagements";
+  let auditItems: { title: string; icon: any; displayLabel?: string }[] = [];
+
+  if (role === "admin") {
+    auditGroupLabel = "Audit Administration";
+    auditItems = [
+      { title: "Audit Projects", icon: FolderOpen, displayLabel: "All Audit Projects" },
+      { title: "TOR Management", icon: FileText, displayLabel: "TOR Master Scopes" },
+      { title: "DRT Tracker", icon: CheckCircle2, displayLabel: "Global DRT Tracker" },
+    ];
+  } else if (role === "auditor") {
+    auditGroupLabel = "Auditor Operations";
+    auditItems = [
+      { title: "Audit Projects", icon: FolderOpen, displayLabel: "Audit Engagements" },
+      { title: "TOR Management", icon: FileText, displayLabel: "TOR Authoring" },
+      { title: "DRT Tracker", icon: CheckCircle2, displayLabel: "Task Division & DRT" },
+    ];
+  } else if (role === "auditee") {
+    auditGroupLabel = "Verification Queue";
+    auditItems = [
+      { title: "DRT Tracker", icon: CheckCircle2, displayLabel: "My Verification Tasks" },
+      { title: "Audit Projects", icon: FolderOpen, displayLabel: "Assigned Audits" },
+    ];
+  } else {
+    // company_user (Client Organization)
+    auditGroupLabel = "Compliance Operations";
+    auditItems = [
+      { title: "Audit Projects", icon: FolderOpen, displayLabel: "My Audits" },
+      { title: "DRT Tracker", icon: CheckCircle2, displayLabel: "Evidence Vault (DRT)" },
+      { title: "TOR Management", icon: FileText, displayLabel: "Terms of Reference" },
+    ];
+  }
+
+  // 3. Management Section (Tailored by Role)
+  let managementGroupLabel = "";
+  let managementItems: { title: string; icon: any; displayLabel?: string }[] = [];
+
+  if (role === "admin") {
+    managementGroupLabel = "System Administration";
+    managementItems = [
+      { title: "Companies", icon: Building2, displayLabel: "Tenant Companies" },
+      { title: "Guideline Categories", icon: ShieldCheck, displayLabel: "Guideline Categories" },
+    ];
+  } else if (role === "company_user") {
+    managementGroupLabel = "Organization";
+    managementItems = [
+      { title: "My Organization", icon: Building2, displayLabel: "Organization & Plan" },
+    ];
+  }
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
@@ -151,19 +215,19 @@ export function AppSidebar({
 
         {/* Audit Modules Section */}
         <SidebarGroup>
-          <SidebarGroupLabel>Audit Modules</SidebarGroupLabel>
+          <SidebarGroupLabel>{auditGroupLabel}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {auditItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
-                    tooltip={item.title}
+                    tooltip={item.displayLabel || item.title}
                     isActive={activeTab === item.title}
                     onClick={() => onSelectTab?.(item.title)}
                     className="cursor-pointer"
                   >
                     <item.icon />
-                    <span>{item.title}</span>
+                    <span>{item.displayLabel || item.title}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -171,27 +235,29 @@ export function AppSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Management Section */}
-        <SidebarGroup>
-          <SidebarGroupLabel>Management</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {managementItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    tooltip={item.title}
-                    isActive={activeTab === item.title}
-                    onClick={() => onSelectTab?.(item.title)}
-                    className="cursor-pointer"
-                  >
-                    <item.icon />
-                    <span>{item.title}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {/* Management Section (Only if items exist for this role) */}
+        {managementItems.length > 0 && (
+          <SidebarGroup>
+            <SidebarGroupLabel>{managementGroupLabel}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {managementItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      tooltip={item.displayLabel || item.title}
+                      isActive={activeTab === item.title}
+                      onClick={() => onSelectTab?.(item.title)}
+                      className="cursor-pointer"
+                    >
+                      <item.icon />
+                      <span>{item.displayLabel || item.title}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
 
         {/* Extras Section */}
         <SidebarGroup className="mt-auto">

@@ -21,22 +21,30 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/context/authContext";
+import SubscriptionModal from "@/components/subscription/subscriptionModal";
 import {
   fetchCompanies,
+  fetchCompanyById,
   createCompany,
   deleteCompany,
   type Company,
 } from "@/lib/api";
+import { Zap, ShieldAlert, ArrowUpRight } from "lucide-react";
 
 export default function CompanyManagement() {
-  const { token, user } = useAuth();
+  const { token, user, refreshProfile } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [myCompany, setMyCompany] = useState<Company | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  // Modal State
+  // Subscription Modal State
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+  const [selectedCompanyForSub, setSelectedCompanyForSub] = useState<Company | null>(null);
+
+  // Modal State for New Company (Admin only)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -50,15 +58,29 @@ export default function CompanyManagement() {
   const [contactPhone, setContactPhone] = useState("");
   const [address, setAddress] = useState("");
 
-  const canManage = user?.role === "admin" || user?.role === "auditor";
+  const isCompanyUser = user?.role === "company_user";
+  const canManage = user?.role === "admin";
 
-  const loadCompanies = async () => {
+  const loadData = async () => {
     if (!token) return;
     setIsLoading(true);
     setError(null);
+
     try {
-      const data = await fetchCompanies(token);
-      setCompanies(data);
+      if (isCompanyUser) {
+        // Organization user: load strictly their own company profile
+        const compId = user?.companyId || user?.company?.id;
+        if (compId) {
+          const compData = await fetchCompanyById(token, compId);
+          setMyCompany(compData);
+        } else if (user?.company) {
+          setMyCompany(user.company as any);
+        }
+      } else {
+        // Admin / Auditor: load multi-tenant companies directory
+        const data = await fetchCompanies(token);
+        setCompanies(data);
+      }
     } catch (err: unknown) {
       setError(
         err instanceof Error ? err.message : "Failed to load company records",
@@ -69,8 +91,8 @@ export default function CompanyManagement() {
   };
 
   useEffect(() => {
-    loadCompanies();
-  }, [token]);
+    loadData();
+  }, [token, isCompanyUser]);
 
   const handleCreateCompany = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,6 +167,275 @@ export default function CompanyManagement() {
   const pendingCount = companies.filter(
     (c) => c.status === "pending_review",
   ).length;
+
+  if (isCompanyUser) {
+    return (
+      <div className="space-y-6">
+        {/* Top Banner / Actions Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 mb-1.5 border border-indigo-100">
+              <Building2 className="h-3.5 w-3.5" />
+              <span>Dedicated Organization Profile</span>
+            </div>
+            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+              My Organization & Plan
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500">
+              Manage corporate details, compliance quotas, and GRC subscription tier.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedCompanyForSub(myCompany);
+              setIsSubscriptionModalOpen(true);
+            }}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 px-4 py-2.5 text-xs sm:text-sm font-semibold text-white shadow-sm hover:from-indigo-700 hover:to-indigo-800 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          >
+            <Zap className="h-4 w-4" />
+            <span>Manage / Upgrade Plan</span>
+          </button>
+        </div>
+
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center p-12 bg-white rounded-2xl border border-slate-200">
+            <Loader2 className="h-8 w-8 animate-spin text-indigo-600 mb-2" />
+            <p className="text-xs text-slate-500">Loading organization details...</p>
+          </div>
+        ) : error ? (
+          <div className="p-6 bg-red-50 rounded-2xl border border-red-200 text-red-700 text-sm">
+            <p className="font-semibold">Unable to load organization details</p>
+            <p className="text-xs mt-1 text-red-600">{error}</p>
+          </div>
+        ) : myCompany ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left 2 Cols: Corporate Details */}
+            <div className="lg:col-span-2 space-y-6">
+              <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs">
+                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-3">
+                    <div className="h-12 w-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-lg">
+                      <Building2 className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-900">
+                        {myCompany.name}
+                      </h3>
+                      <p className="text-xs text-slate-500">
+                        {myCompany.industry || "Enterprise"} • Registered Tenant
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
+                      myCompany.status === "active"
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : "bg-amber-50 text-amber-700 border border-amber-200"
+                    }`}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span className="capitalize">{myCompany.status} Tenant</span>
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6">
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                      Business Registration
+                    </span>
+                    <span className="text-sm font-mono font-medium text-slate-800">
+                      {myCompany.registrationNumber || "Not specified"}
+                    </span>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                      Corporate Domain
+                    </span>
+                    <div className="flex items-center gap-1 text-sm font-medium text-indigo-600">
+                      {myCompany.domain ? (
+                        <>
+                          <span>{myCompany.domain}</span>
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </>
+                      ) : (
+                        <span className="text-slate-500">Not specified</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                      Official Contact Email
+                    </span>
+                    <div className="flex items-center gap-1.5 text-sm text-slate-700">
+                      <Mail className="h-3.5 w-3.5 text-slate-400" />
+                      <span>{myCompany.contactEmail || "Not specified"}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                      Contact Phone
+                    </span>
+                    <div className="flex items-center gap-1.5 text-sm text-slate-700">
+                      <Phone className="h-3.5 w-3.5 text-slate-400" />
+                      <span>{myCompany.contactPhone || "Not specified"}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 sm:col-span-2">
+                    <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">
+                      Headquarters Address
+                    </span>
+                    <div className="flex items-center gap-1.5 text-sm text-slate-700">
+                      <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                      <span>{myCompany.address || "Not specified"}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-4 w-4 text-emerald-600" />
+                    <span>Multi-tenant data isolation verified and strictly isolated</span>
+                  </div>
+                  <span>ID: {myCompany.id.slice(0, 8)}...</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right 1 Col: Subscription Plan Details */}
+            <div className="space-y-6">
+              <div className="rounded-2xl border border-indigo-100 bg-gradient-to-b from-indigo-50/50 to-white p-6 shadow-xs relative overflow-hidden">
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center">
+                      <Zap className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wider">
+                        Subscription Plan
+                      </span>
+                      <h4 className="text-base font-bold text-slate-900 capitalize">
+                        {myCompany.subscriptionPlan || "No Active Plan"}
+                      </h4>
+                    </div>
+                  </div>
+
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+                      myCompany.subscriptionStatus === "active"
+                        ? "bg-emerald-100 text-emerald-800"
+                        : myCompany.subscriptionStatus === "trial"
+                        ? "bg-sky-100 text-sky-800"
+                        : "bg-slate-100 text-slate-700"
+                    }`}
+                  >
+                    {myCompany.subscriptionStatus || "Inactive"}
+                  </span>
+                </div>
+
+                <div className="space-y-3 my-5">
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-100">
+                    <span className="text-xs text-slate-600 font-medium">Audit Project Quota</span>
+                    <span className="text-sm font-bold text-slate-900">
+                      {myCompany.maxAudits ?? 0} Projects
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-slate-100">
+                    <span className="text-xs text-slate-600 font-medium">Expires / Renews</span>
+                    <span className="text-xs font-semibold text-slate-800">
+                      {myCompany.subscriptionExpiresAt
+                        ? new Date(myCompany.subscriptionExpiresAt).toLocaleDateString()
+                        : "No Expiration"}
+                    </span>
+                  </div>
+                </div>
+
+                <ul className="space-y-2 mb-6 text-xs text-slate-600">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                    <span>Evidence Vault document storage</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                    <span>Terms of Reference (TOR) verification</span>
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                    <span>Auditor & Auditee reviewer workflows</span>
+                  </li>
+                </ul>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCompanyForSub(myCompany);
+                    setIsSubscriptionModalOpen(true);
+                  }}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs py-3 px-4 shadow-sm transition-colors cursor-pointer"
+                >
+                  <Zap className="h-3.5 w-3.5" />
+                  <span>Change or Upgrade Plan</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="p-8 text-center bg-white rounded-2xl border border-slate-200">
+            <Building2 className="h-10 w-10 text-slate-300 mx-auto mb-3" />
+            <p className="text-sm font-semibold text-slate-800">No company profile associated</p>
+            <p className="text-xs text-slate-500 mt-1">Please contact your system administrator.</p>
+          </div>
+        )}
+
+        {isSubscriptionModalOpen && (
+          <SubscriptionModal
+            isOpen={isSubscriptionModalOpen}
+            onClose={() => {
+              setIsSubscriptionModalOpen(false);
+              setSelectedCompanyForSub(null);
+            }}
+            token={token || ""}
+            companyId={
+              selectedCompanyForSub?.id ||
+              myCompany?.id ||
+              user?.companyId ||
+              user?.company?.id ||
+              ""
+            }
+            companyName={
+              selectedCompanyForSub?.name ||
+              myCompany?.name ||
+              user?.company?.name ||
+              "My Organization"
+            }
+            currentPlan={
+              (selectedCompanyForSub?.subscriptionPlan ||
+                myCompany?.subscriptionPlan) as any
+            }
+            currentStatus={
+              (selectedCompanyForSub?.subscriptionStatus ||
+                myCompany?.subscriptionStatus) as any
+            }
+            onSubscriptionUpdated={(updated) => {
+              if (myCompany && myCompany.id === updated.id) {
+                setMyCompany(updated);
+              }
+              setCompanies((prev) =>
+                prev.map((c) => (c.id === updated.id ? updated : c)),
+              );
+              refreshProfile?.();
+            }}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -264,7 +555,7 @@ export default function CompanyManagement() {
           <AlertCircle className="h-5 w-5 shrink-0 text-red-500" />
           <span>{error}</span>
           <button
-            onClick={loadCompanies}
+            onClick={loadData}
             className="ml-auto underline font-medium text-red-700 hover:text-red-800"
           >
             Retry
@@ -379,13 +670,26 @@ export default function CompanyManagement() {
                 </div>
 
                 {canManage && (
-                  <button
-                    onClick={() => handleDeleteCompany(comp.id, comp.name)}
-                    className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-                    title="Delete Company"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => {
+                        setSelectedCompanyForSub(comp);
+                        setIsSubscriptionModalOpen(true);
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer"
+                      title="Manage Subscription Plan"
+                    >
+                      <Zap className="h-3.5 w-3.5 text-indigo-600" />
+                      <span>Plan</span>
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCompany(comp.id, comp.name)}
+                      className="p-1.5 text-slate-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                      title="Delete Company"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
@@ -558,6 +862,27 @@ export default function CompanyManagement() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Admin Subscription Modal */}
+      {isSubscriptionModalOpen && selectedCompanyForSub && (
+        <SubscriptionModal
+          isOpen={isSubscriptionModalOpen}
+          onClose={() => {
+            setIsSubscriptionModalOpen(false);
+            setSelectedCompanyForSub(null);
+          }}
+          token={token || ""}
+          companyId={selectedCompanyForSub.id}
+          companyName={selectedCompanyForSub.name}
+          currentPlan={selectedCompanyForSub.subscriptionPlan as any}
+          currentStatus={selectedCompanyForSub.subscriptionStatus as any}
+          onSubscriptionUpdated={(updated) => {
+            setCompanies((prev) =>
+              prev.map((c) => (c.id === updated.id ? updated : c)),
+            );
+          }}
+        />
       )}
     </div>
   );

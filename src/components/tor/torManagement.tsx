@@ -463,6 +463,28 @@ export default function TorManagement({ initialAuditId }: TorManagementProps) {
         </div>
       )}
 
+      {/* Read-Only Scoping Guidance for Non-Auditors */}
+      {!canEdit && (
+        <div className="rounded-2xl border border-indigo-100 bg-gradient-to-r from-indigo-50/80 via-blue-50/50 to-indigo-50/80 p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+            <div>
+              <h4 className="text-xs sm:text-sm font-bold text-indigo-950">
+                Terms of Reference (TOR) Authority
+              </h4>
+              <p className="text-xs text-indigo-800/80 mt-0.5">
+                The compliance scope and control clauses are established by the Lead Auditor.
+                {user?.role === "company_user"
+                  ? " As an organization user, please submit your compliance evidence against these clauses in the Evidence Vault (DRT)."
+                  : " As a reviewer, examine submitted evidence against these clauses in your Verification queue."}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Audit Selector & Scope Card */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">

@@ -22,6 +22,7 @@ import {
   ChevronRight,
   Sparkles,
   Zap,
+  Users,
 } from "lucide-react";
 import {
   SidebarProvider,
@@ -40,6 +41,7 @@ import AddDrtModal from "@/components/forms/addDrtModal";
 import SubscriptionModal from "@/components/subscription/subscriptionModal";
 import GuidelineCategoriesManagement from "@/components/guidelines/guidelineCategoriesManagement";
 import NotificationBell from "@/components/notifications/notificationBell";
+import NotificationsCenter from "@/components/notifications/notificationsCenter";
 import {
   fetchAudits,
   fetchAllTorClauses,
@@ -122,28 +124,88 @@ export default function UserDashboard() {
     company_user: "bg-emerald-50 text-emerald-700 border-emerald-200",
   };
 
-  // Metrics calculations
+  const role = user.role;
+  const isAuditorOrAdmin = role === "admin" || role === "auditor";
+  const isCompanyUser = role === "company_user";
+  const isAuditee = role === "auditee";
+
+  // Auditee personal task metrics
+  const myAssignedTasks = drtRequirements.filter(
+    (r) => r.assignedAuditeeId === user.id,
+  );
+  const myAssignedTasksCount = myAssignedTasks.length;
+  const myPendingVerificationCount = myAssignedTasks.filter(
+    (r) => r.status === "submitted" || r.status === "in_review",
+  ).length;
+  const myApprovedCount = myAssignedTasks.filter(
+    (r) => r.status === "approved",
+  ).length;
+  const myRevisionCount = myAssignedTasks.filter(
+    (r) => r.status === "revision_required",
+  ).length;
+
+  // Organization evidence upload metrics
+  const uploadedRequirementsCount = drtRequirements.filter(
+    (r) => r.status !== "pending",
+  ).length;
+  const pendingUploadCount = drtRequirements.filter(
+    (r) => r.status === "pending",
+  ).length;
+
+  // General Metrics calculations
   const activeAuditsCount =
     audits.filter(
-      (a) => a.status === "active" || a.status === "fieldwork"
+      (a) => a.status === "active" || a.status === "fieldwork",
     ).length || audits.length;
 
   const pendingReviewsCount = drtRequirements.filter(
-    (r) => r.status === "submitted" || r.status === "in_review"
+    (r) => r.status === "submitted" || r.status === "in_review",
   ).length;
 
   const approvedDrtCount = drtRequirements.filter(
-    (r) => r.status === "approved"
+    (r) => r.status === "approved",
   ).length;
 
   const revisionRequiredCount = drtRequirements.filter(
-    (r) => r.status === "revision_required"
+    (r) => r.status === "revision_required",
   ).length;
 
   const complianceRate =
     drtRequirements.length > 0
       ? Math.round((approvedDrtCount / drtRequirements.length) * 100)
       : 100;
+
+  // Workspace Dynamic Title & Subtitle
+  const getWorkspaceDetails = () => {
+    switch (role) {
+      case "admin":
+        return {
+          badge: "System Administrator Workspace",
+          subtitle:
+            "Oversee tenant compliance, dynamic guideline categories, and regulatory audit lifecycles.",
+        };
+      case "auditor":
+        return {
+          badge: "Lead Auditor Command Center",
+          subtitle:
+            "Author terms of reference (TORs), distribute verification tasks, and sign off on completed audits.",
+        };
+      case "auditee":
+        return {
+          badge: "Auditee Reviewer Workspace",
+          subtitle:
+            "Review uploaded evidence documents, verify requirement compliance, and issue revision remarks.",
+        };
+      case "company_user":
+      default:
+        return {
+          badge: `Organization Portal${user?.company?.name ? ` • ${user.company.name}` : ""}`,
+          subtitle:
+            "Track compliance obligations, upload evidence documentation, and manage company subscriptions.",
+        };
+    }
+  };
+  const wsDetails = getWorkspaceDetails();
 
   // Filtered lists for dashboard showcase
   const filteredGuidelines = guidelines.filter(
@@ -153,7 +215,7 @@ export default function UserDashboard() {
       (g.objective &&
         g.objective.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (g.auditProject?.title &&
-        g.auditProject.title.toLowerCase().includes(searchQuery.toLowerCase()))
+        g.auditProject.title.toLowerCase().includes(searchQuery.toLowerCase())),
   );
 
   const filteredTorClauses = torClauses.filter(
@@ -163,7 +225,7 @@ export default function UserDashboard() {
       (t.objective &&
         t.objective.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (t.auditProject?.title &&
-        t.auditProject.title.toLowerCase().includes(searchQuery.toLowerCase()))
+        t.auditProject.title.toLowerCase().includes(searchQuery.toLowerCase())),
   );
 
   const filteredDrt = drtRequirements.filter(
@@ -173,7 +235,7 @@ export default function UserDashboard() {
       (d.guidance &&
         d.guidance.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (d.auditProject?.title &&
-        d.auditProject.title.toLowerCase().includes(searchQuery.toLowerCase()))
+        d.auditProject.title.toLowerCase().includes(searchQuery.toLowerCase())),
   );
 
   const getDrtStatusBadge = (status: string) => {
@@ -226,8 +288,8 @@ export default function UserDashboard() {
               </h1>
             </div>
             <div className="flex items-center gap-3">
-              {/* Organization Subscription Plan Badge */}
-              {user?.company && (
+              {/* Organization Subscription Plan Badge (Only for Client Organizations) */}
+              {isCompanyUser && user?.company && (
                 <button
                   type="button"
                   onClick={() => setIsSubscriptionModalOpen(true)}
@@ -262,12 +324,27 @@ export default function UserDashboard() {
 
         {/* Main Content Area */}
         <main className="flex-1 overflow-auto bg-slate-50 p-6">
-          {activeTab === "Companies" ? (
+          {activeTab === "Companies" || activeTab === "My Organization" ? (
             <CompanyManagement />
+          ) : activeTab === "Notifications" ? (
+            <NotificationsCenter
+              token={token}
+              onNavigateToAudit={(auditId) => {
+                setSelectedAuditIdForTor(auditId);
+                setActiveTab("Audit Projects");
+              }}
+              onNavigateToDrt={(auditId) => {
+                setSelectedAuditIdForTor(auditId);
+                setActiveTab("DRT Tracker");
+              }}
+            />
           ) : activeTab === "Guideline Categories" ? (
             <GuidelineCategoriesManagement />
           ) : activeTab === "Audit Projects" ? (
-            <AuditProjects onNavigateToTor={handleNavigateToTor} />
+            <AuditProjects
+              onNavigateToTor={handleNavigateToTor}
+              onNavigateToDrt={handleNavigateToDrt}
+            />
           ) : activeTab === "TOR Management" || activeTab === "Guidelines" ? (
             <TorManagement initialAuditId={selectedAuditIdForTor} />
           ) : activeTab === "DRT Tracker" ? (
@@ -291,8 +368,8 @@ export default function UserDashboard() {
                         <ShieldCheck className="h-3.5 w-3.5" />
                         {user.role.replace("_", " ")}
                       </span>
-                      <span className="text-xs text-indigo-300">
-                        Admin Workspace
+                      <span className="text-xs text-indigo-300 font-medium">
+                        {wsDetails.badge}
                       </span>
                     </div>
 
@@ -300,153 +377,413 @@ export default function UserDashboard() {
                       Welcome back, {user.name}!
                     </h2>
                     <p className="text-sm sm:text-base text-slate-300 max-w-xl">
-                      Manage compliance controls, TOR clauses, and evidence vault submissions seamlessly.
+                      {wsDetails.subtitle}
                     </p>
                   </div>
 
-                  {/* Quick Action Buttons */}
+                  {/* Role-Specific Quick Action Buttons */}
                   <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setIsGuidelineModalOpen(true)}
-                      className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-900/30 transition-all hover:scale-105 cursor-pointer"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span>+ Add Guideline</span>
-                    </button>
+                    {role === "admin" && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("Guideline Categories")}
+                          className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-lg shadow-purple-900/30 transition-all hover:scale-105 cursor-pointer"
+                        >
+                          <ShieldCheck className="h-4 w-4" />
+                          <span>Manage Categories</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("Audit Projects")}
+                          className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-900/30 transition-all hover:scale-105 cursor-pointer"
+                        >
+                          <Plus className="h-4 w-4" />
+                          <span>New Audit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("Companies")}
+                          className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold border border-slate-700 shadow-lg transition-all hover:scale-105 cursor-pointer"
+                        >
+                          <Building2 className="h-4 w-4" />
+                          <span>Tenant Companies</span>
+                        </button>
+                      </>
+                    )}
 
-                    <button
-                      type="button"
-                      onClick={() => setIsTorModalOpen(true)}
-                      className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-900/30 transition-all hover:scale-105 cursor-pointer"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span>+ Add TOR Clause</span>
-                    </button>
+                    {role === "auditor" && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("Audit Projects")}
+                          className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-900/30 transition-all hover:scale-105 cursor-pointer"
+                        >
+                          <Plus className="h-4 w-4" />
+                          <span>New Audit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("TOR Management")}
+                          className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold shadow-lg shadow-blue-900/30 transition-all hover:scale-105 cursor-pointer"
+                        >
+                          <FileText className="h-4 w-4" />
+                          <span>Author TORs</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("DRT Tracker")}
+                          className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold shadow-lg shadow-purple-900/30 transition-all hover:scale-105 cursor-pointer"
+                        >
+                          <Users className="h-4 w-4" />
+                          <span>Distribute Tasks</span>
+                        </button>
+                      </>
+                    )}
 
-                    <button
-                      type="button"
-                      onClick={() => setIsDrtModalOpen(true)}
-                      className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-900/30 transition-all hover:scale-105 cursor-pointer"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span>+ Add DRT Item</span>
-                    </button>
+                    {role === "auditee" && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("DRT Tracker")}
+                        className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-900/30 transition-all hover:scale-105 cursor-pointer"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span>Review Assigned Tasks ({myAssignedTasksCount})</span>
+                      </button>
+                    )}
+
+                    {role === "company_user" && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("Audit Projects")}
+                          className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg shadow-indigo-900/30 transition-all hover:scale-105 cursor-pointer"
+                        >
+                          <Plus className="h-4 w-4" />
+                          <span>Launch Audit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab("DRT Tracker")}
+                          className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-lg shadow-emerald-900/30 transition-all hover:scale-105 cursor-pointer"
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span>Upload Evidence</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsSubscriptionModalOpen(true)}
+                          className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs font-bold border border-amber-500/30 shadow-lg transition-all hover:scale-105 cursor-pointer"
+                        >
+                          <Zap className="h-4 w-4 text-amber-400" />
+                          <span>Subscription Plan</span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
 
-              {/* Dynamic Stats Row */}
+              {/* Dynamic Stats Row (Tailored by Role) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-                {/* Active Audits */}
-                <div
-                  onClick={() => setActiveTab("Audit Projects")}
-                  className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs hover:border-purple-300 hover:shadow-md transition-all cursor-pointer group"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                      Active Audits
-                    </span>
-                    <div className="h-8 w-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center group-hover:bg-purple-100 transition-colors">
-                      <FolderOpen className="h-4 w-4" />
+                {isAuditee ? (
+                  <>
+                    {/* Auditee Card 1: My Assigned Tasks */}
+                    <div
+                      onClick={() => setActiveTab("DRT Tracker")}
+                      className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                          My Assigned Tasks
+                        </span>
+                        <div className="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-100 transition-colors">
+                          <CheckCircle2 className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {myAssignedTasksCount}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">Requirements assigned to you</p>
                     </div>
-                  </div>
-                  <p className="text-2xl font-bold text-slate-900">
-                    {activeAuditsCount}
-                  </p>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Projects configured
-                  </p>
-                </div>
 
-                {/* Compliance Guidelines */}
-                <div
-                  onClick={() => {
-                    setDashboardTab("guidelines");
-                  }}
-                  className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs hover:border-emerald-300 hover:shadow-md transition-all cursor-pointer group"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                      Guidelines
-                    </span>
-                    <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-100 transition-colors">
-                      <ClipboardList className="h-4 w-4" />
+                    {/* Auditee Card 2: Pending My Verification */}
+                    <div
+                      onClick={() => setActiveTab("DRT Tracker")}
+                      className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs hover:border-amber-300 hover:shadow-md transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                          Pending My Review
+                        </span>
+                        <div className="h-8 w-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-100 transition-colors">
+                          <Clock className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {myPendingVerificationCount}
+                      </p>
+                      <p className="text-xs text-amber-600 mt-1">Awaiting your inspection</p>
                     </div>
-                  </div>
-                  <p className="text-2xl font-bold text-slate-900">
-                    {guidelines.length}
-                  </p>
-                  <p className="text-xs text-emerald-600 mt-1">
-                    Standard benchmarks
-                  </p>
-                </div>
 
-                {/* TOR Clauses */}
-                <div
-                  onClick={() => {
-                    setDashboardTab("tor");
-                  }}
-                  className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                      TOR Clauses
-                    </span>
-                    <div className="h-8 w-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
-                      <FileText className="h-4 w-4" />
+                    {/* Auditee Card 3: Approved by Me */}
+                    <div
+                      onClick={() => setActiveTab("DRT Tracker")}
+                      className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs hover:border-emerald-300 hover:shadow-md transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                          Verified & Approved
+                        </span>
+                        <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-100 transition-colors">
+                          <CheckCircle2 className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {myApprovedCount}
+                      </p>
+                      <p className="text-xs text-emerald-600 mt-1">Validated controls</p>
                     </div>
-                  </div>
-                  <p className="text-2xl font-bold text-slate-900">
-                    {torClauses.length}
-                  </p>
-                  <p className="text-xs text-blue-600 mt-1">
-                    Scope criteria mapped
-                  </p>
-                </div>
 
-                {/* DRT Requirements */}
-                <div
-                  onClick={() => {
-                    setDashboardTab("drt");
-                  }}
-                  className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer group"
-                >
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                      DRT Evidence
-                    </span>
-                    <div className="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-100 transition-colors">
-                      <CheckCircle2 className="h-4 w-4" />
+                    {/* Auditee Card 4: Revisions Requested */}
+                    <div
+                      onClick={() => setActiveTab("DRT Tracker")}
+                      className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs hover:border-rose-300 hover:shadow-md transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                          Revisions Requested
+                        </span>
+                        <div className="h-8 w-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center group-hover:bg-rose-100 transition-colors">
+                          <AlertTriangle className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {myRevisionCount}
+                      </p>
+                      <p className="text-xs text-rose-600 mt-1">Correction remarks sent</p>
                     </div>
-                  </div>
-                  <p className="text-2xl font-bold text-slate-900">
-                    {drtRequirements.length}
-                  </p>
-                  <p className="text-xs text-indigo-600 mt-1">
-                    {approvedDrtCount} Approved · {pendingReviewsCount} Review
-                  </p>
-                </div>
 
-                {/* Compliance Score */}
-                <div className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                      Compliance
-                    </span>
-                    <div className="h-8 w-8 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center">
-                      <TrendingUp className="h-4 w-4" />
+                    {/* Auditee Card 5: Assigned Audits */}
+                    <div
+                      onClick={() => setActiveTab("Audit Projects")}
+                      className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs hover:border-purple-300 hover:shadow-md transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                          Assigned Audits
+                        </span>
+                        <div className="h-8 w-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center group-hover:bg-purple-100 transition-colors">
+                          <FolderOpen className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {audits.length}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">Active team engagements</p>
                     </div>
-                  </div>
-                  <p className="text-2xl font-bold text-slate-900">
-                    {complianceRate}%
-                  </p>
-                  <p className="text-xs text-slate-400 mt-1">
-                    {revisionRequiredCount > 0
-                      ? `${revisionRequiredCount} Revisions needed`
-                      : "Passing benchmarks"}
-                  </p>
-                </div>
+                  </>
+                ) : isCompanyUser ? (
+                  <>
+                    {/* Company User Card 1: My Audits */}
+                    <div
+                      onClick={() => setActiveTab("Audit Projects")}
+                      className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs hover:border-purple-300 hover:shadow-md transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                          My Audits
+                        </span>
+                        <div className="h-8 w-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center group-hover:bg-purple-100 transition-colors">
+                          <FolderOpen className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {audits.length}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">Active regulatory projects</p>
+                    </div>
+
+                    {/* Company User Card 2: Uploaded Evidence */}
+                    <div
+                      onClick={() => setActiveTab("DRT Tracker")}
+                      className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                          Evidence Uploaded
+                        </span>
+                        <div className="h-8 w-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+                          <CheckCircle2 className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {uploadedRequirementsCount}
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">Out of {drtRequirements.length} required</p>
+                    </div>
+
+                    {/* Company User Card 3: Pending Uploads */}
+                    <div
+                      onClick={() => setActiveTab("DRT Tracker")}
+                      className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs hover:border-amber-300 hover:shadow-md transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                          Pending Uploads
+                        </span>
+                        <div className="h-8 w-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center group-hover:bg-amber-100 transition-colors">
+                          <Clock className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {pendingUploadCount}
+                      </p>
+                      <p className="text-xs text-amber-600 mt-1">Awaiting document upload</p>
+                    </div>
+
+                    {/* Company User Card 4: Revision Required */}
+                    <div
+                      onClick={() => setActiveTab("DRT Tracker")}
+                      className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs hover:border-rose-300 hover:shadow-md transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                          Revisions Requested
+                        </span>
+                        <div className="h-8 w-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center group-hover:bg-rose-100 transition-colors">
+                          <AlertTriangle className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {revisionRequiredCount}
+                      </p>
+                      <p className="text-xs text-rose-600 mt-1">Action required by auditor</p>
+                    </div>
+
+                    {/* Company User Card 5: Compliance Score */}
+                    <div className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                          Compliance
+                        </span>
+                        <div className="h-8 w-8 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center">
+                          <TrendingUp className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {complianceRate}%
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">{approvedDrtCount} controls verified</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Admin / Auditor Card 1: Active Audits */}
+                    <div
+                      onClick={() => setActiveTab("Audit Projects")}
+                      className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs hover:border-purple-300 hover:shadow-md transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                          Active Audits
+                        </span>
+                        <div className="h-8 w-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center group-hover:bg-purple-100 transition-colors">
+                          <FolderOpen className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {activeAuditsCount}
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">Projects configured</p>
+                    </div>
+
+                    {/* Admin / Auditor Card 2: Guidelines */}
+                    <div
+                      onClick={() => {
+                        setDashboardTab("guidelines");
+                      }}
+                      className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs hover:border-emerald-300 hover:shadow-md transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                          Guidelines
+                        </span>
+                        <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center group-hover:bg-emerald-100 transition-colors">
+                          <ClipboardList className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {guidelines.length}
+                      </p>
+                      <p className="text-xs text-emerald-600 mt-1">Standard benchmarks</p>
+                    </div>
+
+                    {/* Admin / Auditor Card 3: TOR Clauses */}
+                    <div
+                      onClick={() => {
+                        setDashboardTab("tor");
+                      }}
+                      className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                          TOR Clauses
+                        </span>
+                        <div className="h-8 w-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
+                          <FileText className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {torClauses.length}
+                      </p>
+                      <p className="text-xs text-blue-600 mt-1">Scope criteria mapped</p>
+                    </div>
+
+                    {/* Admin / Auditor Card 4: DRT Requirements */}
+                    <div
+                      onClick={() => {
+                        setDashboardTab("drt");
+                      }}
+                      className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs hover:border-indigo-300 hover:shadow-md transition-all cursor-pointer group"
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                          DRT Evidence
+                        </span>
+                        <div className="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center group-hover:bg-indigo-100 transition-colors">
+                          <CheckCircle2 className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {drtRequirements.length}
+                      </p>
+                      <p className="text-xs text-indigo-600 mt-1">
+                        {approvedDrtCount} Approved · {pendingReviewsCount} Review
+                      </p>
+                    </div>
+
+                    {/* Admin / Auditor Card 5: Compliance Score */}
+                    <div className="rounded-xl bg-white p-5 border border-slate-200/80 shadow-xs">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                          Compliance
+                        </span>
+                        <div className="h-8 w-8 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center">
+                          <TrendingUp className="h-4 w-4" />
+                        </div>
+                      </div>
+                      <p className="text-2xl font-bold text-slate-900">
+                        {complianceRate}%
+                      </p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {revisionRequiredCount > 0
+                          ? `${revisionRequiredCount} Revisions needed`
+                          : "Passing benchmarks"}
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* LIVE DASHBOARD SHOWCASE: Guidelines, TOR & DRT Table */}
@@ -520,7 +857,7 @@ export default function UserDashboard() {
                       />
                     </button>
 
-                    {dashboardTab === "guidelines" && (
+                    {isAuditorOrAdmin && dashboardTab === "guidelines" && (
                       <button
                         type="button"
                         onClick={() => setIsGuidelineModalOpen(true)}
@@ -531,7 +868,7 @@ export default function UserDashboard() {
                       </button>
                     )}
 
-                    {dashboardTab === "tor" && (
+                    {isAuditorOrAdmin && dashboardTab === "tor" && (
                       <button
                         type="button"
                         onClick={() => setIsTorModalOpen(true)}
@@ -542,7 +879,7 @@ export default function UserDashboard() {
                       </button>
                     )}
 
-                    {dashboardTab === "drt" && (
+                    {isAuditorOrAdmin && dashboardTab === "drt" && (
                       <button
                         type="button"
                         onClick={() => setIsDrtModalOpen(true)}
@@ -550,6 +887,17 @@ export default function UserDashboard() {
                       >
                         <Plus className="h-3.5 w-3.5" />
                         <span>Add DRT</span>
+                      </button>
+                    )}
+
+                    {isCompanyUser && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("DRT Tracker")}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors shrink-0 shadow-xs cursor-pointer"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        <span>Open Evidence Vault</span>
                       </button>
                     )}
                   </div>
