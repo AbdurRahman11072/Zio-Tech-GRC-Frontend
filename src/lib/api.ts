@@ -362,8 +362,14 @@ export async function deleteGuidelineCategory(
   return data;
 }
 
-export async function fetchUsers(token: string): Promise<UserProfile[]> {
-  const res = await fetch(`${API_URL}/users`, {
+export async function fetchUsers(
+  token: string,
+  role?: string,
+): Promise<UserProfile[]> {
+  const url = role
+    ? `${API_URL}/users?role=${encodeURIComponent(role)}`
+    : `${API_URL}/users`;
+  const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
   });
   const data = await res.json();
@@ -371,6 +377,15 @@ export async function fetchUsers(token: string): Promise<UserProfile[]> {
     throw new Error(data.message || "Failed to fetch users");
   }
   return data;
+}
+
+export interface AuditMember {
+  id: string;
+  auditProjectId: string;
+  userId: string;
+  user?: UserProfile;
+  roleInAudit: "lead_auditor" | "auditee_reviewer" | "contributor";
+  assignedAt: string;
 }
 
 export interface AuditProject {
@@ -400,6 +415,9 @@ export interface AuditProject {
   company?: Company;
   leadAuditorId?: string | null;
   leadAuditor?: UserProfile | null;
+  guidelineCategoryId?: string | null;
+  guidelineCategory?: GuidelineCategory | null;
+  members?: AuditMember[];
   createdAt: string;
   updatedAt: string;
 }
@@ -440,8 +458,10 @@ export async function createAudit(
     scope?: string;
     startDate?: string;
     targetDate?: string;
-    companyId: string;
+    companyId?: string;
     leadAuditorId?: string;
+    guidelineCategoryId?: string;
+    auditeeIds?: string[];
   },
 ): Promise<AuditProject> {
   const res = await fetch(`${API_URL}/audits`, {
@@ -458,6 +478,62 @@ export async function createAudit(
       ? data.message.join(", ")
       : data.message || "Failed to create audit project";
     throw new Error(errorMsg);
+  }
+  return data;
+}
+
+export async function fetchAuditMembers(
+  token: string,
+  auditId: string,
+): Promise<AuditMember[]> {
+  const res = await fetch(`${API_URL}/audits/${auditId}/members`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to fetch audit members");
+  }
+  return data;
+}
+
+export async function addAuditMember(
+  token: string,
+  auditId: string,
+  payload: {
+    userId: string;
+    roleInAudit?: "lead_auditor" | "auditee_reviewer" | "contributor";
+  },
+): Promise<AuditMember> {
+  const res = await fetch(`${API_URL}/audits/${auditId}/members`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(data.message)
+      ? data.message.join(", ")
+      : data.message || "Failed to add member to audit";
+    throw new Error(errorMsg);
+  }
+  return data;
+}
+
+export async function removeAuditMember(
+  token: string,
+  auditId: string,
+  memberId: string,
+): Promise<{ message: string }> {
+  const res = await fetch(`${API_URL}/audits/${auditId}/members/${memberId}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to remove member from audit");
   }
   return data;
 }
