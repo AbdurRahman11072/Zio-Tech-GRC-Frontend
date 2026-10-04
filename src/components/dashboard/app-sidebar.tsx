@@ -65,16 +65,20 @@ const auditItems = [
 
 const managementItems = [
   {
-    title: "User Management",
-    icon: Users,
-  },
-  {
     title: "Companies",
     icon: Building2,
   },
   {
-    title: "Compliance",
+    title: "Guideline Categories",
     icon: ShieldCheck,
+  },
+  {
+    title: "User Management",
+    icon: Users,
+  },
+  {
+    title: "Compliance",
+    icon: Database,
   },
 ];
 

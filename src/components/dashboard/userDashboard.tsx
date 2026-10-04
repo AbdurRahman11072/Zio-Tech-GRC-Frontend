@@ -38,6 +38,7 @@ import AddGuidelineModal from "@/components/forms/addGuidelineModal";
 import AddTorModal from "@/components/forms/addTorModal";
 import AddDrtModal from "@/components/forms/addDrtModal";
 import SubscriptionModal from "@/components/subscription/subscriptionModal";
+import GuidelineCategoriesManagement from "@/components/guidelines/guidelineCategoriesManagement";
 import {
   fetchAudits,
   fetchAllTorClauses,
@@ -259,6 +260,8 @@ export default function UserDashboard() {
         <main className="flex-1 overflow-auto bg-slate-50 p-6">
           {activeTab === "Companies" ? (
             <CompanyManagement />
+          ) : activeTab === "Guideline Categories" ? (
+            <GuidelineCategoriesManagement />
           ) : activeTab === "Audit Projects" ? (
             <AuditProjects onNavigateToTor={handleNavigateToTor} />
           ) : activeTab === "TOR Management" || activeTab === "Guidelines" ? (

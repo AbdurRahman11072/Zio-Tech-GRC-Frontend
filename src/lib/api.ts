@@ -265,6 +265,103 @@ export async function deleteCompany(
   return data;
 }
 
+export interface GuidelineCategory {
+  id: string;
+  name: string;
+  code: string;
+  description?: string | null;
+  icon: string;
+  isActive: boolean;
+  sortOrder: number;
+  createdByAdminId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function fetchGuidelineCategories(
+  token: string,
+  all = false,
+): Promise<GuidelineCategory[]> {
+  const url = all
+    ? `${API_URL}/guideline-categories?all=true`
+    : `${API_URL}/guideline-categories`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to fetch guideline categories");
+  }
+  return data;
+}
+
+export async function createGuidelineCategory(
+  token: string,
+  payload: {
+    name: string;
+    code?: string;
+    description?: string;
+    icon?: string;
+    isActive?: boolean;
+    sortOrder?: number;
+  },
+): Promise<GuidelineCategory> {
+  const res = await fetch(`${API_URL}/guideline-categories`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(data.message)
+      ? data.message.join(", ")
+      : data.message || "Failed to create guideline category";
+    throw new Error(errorMsg);
+  }
+  return data;
+}
+
+export async function updateGuidelineCategory(
+  token: string,
+  id: string,
+  payload: Partial<GuidelineCategory>,
+): Promise<GuidelineCategory> {
+  const res = await fetch(`${API_URL}/guideline-categories/${id}`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(data.message)
+      ? data.message.join(", ")
+      : data.message || "Failed to update guideline category";
+    throw new Error(errorMsg);
+  }
+  return data;
+}
+
+export async function deleteGuidelineCategory(
+  token: string,
+  id: string,
+): Promise<{ message: string }> {
+  const res = await fetch(`${API_URL}/guideline-categories/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to delete guideline category");
+  }
+  return data;
+}
+
 export async function fetchUsers(token: string): Promise<UserProfile[]> {
   const res = await fetch(`${API_URL}/users`, {
     headers: { Authorization: `Bearer ${token}` },
