@@ -18,6 +18,8 @@ import {
   UserPlus,
   Sparkles,
   BookOpen,
+  Zap,
+  AlertTriangle,
 } from "lucide-react";
 import {
   fetchGuidelineCategories,
@@ -157,6 +159,25 @@ export default function CreateAuditWizardModal({
 
     const selectedCategory = categories.find((c) => c.id === selectedCategoryId);
 
+    // Only send framework if it exactly matches a valid backend enum value.
+    // If not mappable, omit entirely (field is @IsOptional on backend) to avoid
+    // class-validator enum errors that would mask the real subscription error.
+    const VALID_FRAMEWORKS = [
+      "ISO_27001",
+      "SOC_2_TYPE_2",
+      "NIST_CSF",
+      "PCI_DSS",
+      "HIPAA",
+      "CUSTOM",
+    ] as const;
+    type ValidFramework = (typeof VALID_FRAMEWORKS)[number];
+    const codeUpper = selectedCategory?.code?.toUpperCase() ?? "";
+    const mappedFramework: ValidFramework | undefined = (
+      VALID_FRAMEWORKS as readonly string[]
+    ).includes(codeUpper)
+      ? (codeUpper as ValidFramework)
+      : undefined; // omit rather than send invalid value
+
     try {
       const created = await createAudit(token, {
         title: title.trim(),
@@ -167,22 +188,39 @@ export default function CreateAuditWizardModal({
         guidelineCategoryId: selectedCategoryId || undefined,
         leadAuditorId: leadAuditorId || undefined,
         auditeeIds: selectedAuditeeIds,
-        // Map category standard code or framework
-        framework: selectedCategory?.code || "CUSTOM",
+        ...(mappedFramework ? { framework: mappedFramework } : {}),
         status: "active",
       });
 
       onAuditCreated(created);
       onClose();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to create audit project";
-      setErrorMessage(msg);
-      if (msg.toLowerCase().includes("subscription")) {
-        const comp = companies.find((c) => c.id === companyId) || (currentUser?.company as Company);
+      const apiErr = err as Error & { status?: number };
+      const msg = apiErr.message || "Failed to create audit project";
+      const httpStatus = apiErr.status;
+
+      // HTTP 403 = subscription required (ForbiddenException from backend)
+      // Also catch keyword matches for robustness
+      const isSubscriptionError =
+        httpStatus === 403 ||
+        msg.toLowerCase().includes("subscription") ||
+        msg.toLowerCase().includes("active subscription") ||
+        msg.toLowerCase().includes("upgrade") ||
+        msg.toLowerCase().includes("purchase");
+
+      if (isSubscriptionError) {
+        const comp =
+          companies.find((c) => c.id === companyId) ||
+          (currentUser?.company as Company);
         if (comp && onSubscriptionRequired) {
           onSubscriptionRequired(comp);
+          // Close wizard and let subscription modal handle it
+          setIsSubmitting(false);
+          return;
         }
       }
+
+      setErrorMessage(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -206,7 +244,7 @@ export default function CreateAuditWizardModal({
                 New Audit Project Wizard
               </h3>
               <p className="text-xs text-slate-500">
-                Step-by-step audit initialization with guideline scoping & team assignment
+                Step-by-step audit initialization with guideline scoping &amp; team assignment
               </p>
             </div>
           </div>
@@ -326,7 +364,7 @@ export default function CreateAuditWizardModal({
           {isLoadingMeta ? (
             <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-500">
               <Loader2 className="h-7 w-7 animate-spin text-indigo-600" />
-              <p className="text-xs">Loading metadata & guideline categories...</p>
+              <p className="text-xs">Loading metadata &amp; guideline categories...</p>
             </div>
           ) : (
             <>
@@ -405,7 +443,7 @@ export default function CreateAuditWizardModal({
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Audit Scope & Compliance Objectives
+                      Audit Scope &amp; Compliance Objectives
                     </label>
                     <textarea
                       rows={3}
@@ -500,7 +538,7 @@ export default function CreateAuditWizardModal({
                       <UserCheck className="h-3.5 w-3.5 text-indigo-600" />
                       <span>Assign Lead Auditor</span>
                       <span className="text-slate-400 font-normal">
-                        (Audits & TOR authoring lead)
+                        (Audits &amp; TOR authoring lead)
                       </span>
                     </label>
                     <select
@@ -523,7 +561,7 @@ export default function CreateAuditWizardModal({
                         <Users className="h-3.5 w-3.5 text-indigo-600" />
                         <span>Assign Auditee Members</span>
                         <span className="text-slate-400 font-normal">
-                          (Task verification & DRT upload team)
+                          (Task verification &amp; DRT upload team)
                         </span>
                       </label>
                       <span className="text-[11px] text-slate-500">
@@ -568,7 +606,7 @@ export default function CreateAuditWizardModal({
                                     {auditee.name}
                                   </p>
                                   <p className="text-[10px] text-slate-400">
-                                    {auditee.email} {auditee.company?.name ? `• ${auditee.company.name}` : ""}
+                                    {auditee.email} {auditee.company?.name ? `- ${auditee.company.name}` : ""}
                                   </p>
                                 </div>
                               </div>
@@ -643,10 +681,10 @@ export default function CreateAuditWizardModal({
                     {scope && (
                       <div className="pt-2 border-t border-slate-200 text-xs">
                         <span className="text-slate-400 text-[11px] block">
-                          Scope & Objectives
+                          Scope &amp; Objectives
                         </span>
                         <p className="text-slate-600 text-xs mt-0.5 italic">
-                          "{scope}"
+                          &quot;{scope}&quot;
                         </p>
                       </div>
                     )}

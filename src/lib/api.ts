@@ -474,10 +474,13 @@ export async function createAudit(
   });
   const data = await res.json();
   if (!res.ok) {
-    const errorMsg = Array.isArray(data.message)
+    const rawMsg = Array.isArray(data.message)
       ? data.message.join(", ")
       : data.message || "Failed to create audit project";
-    throw new Error(errorMsg);
+    // Attach HTTP status so callers can distinguish 403 (subscription) from 400 (validation)
+    const err = new Error(rawMsg) as Error & { status?: number };
+    err.status = res.status;
+    throw err;
   }
   return data;
 }

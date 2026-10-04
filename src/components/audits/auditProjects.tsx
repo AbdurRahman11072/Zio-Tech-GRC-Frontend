@@ -471,6 +471,18 @@ export default function AuditProjects({
                       </div>
                     )}
 
+                    <div className="flex items-center gap-2 text-slate-400 text-[11px]">
+                      <Clock className="h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        Created{" "}
+                        {new Date(audit.createdAt).toLocaleDateString(undefined, {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </span>
+                    </div>
+
                     <div className="flex items-center justify-between text-xs text-slate-600 pt-1">
                       <div className="flex items-center gap-2 text-slate-600">
                         <Users className="h-3.5 w-3.5 text-slate-400 shrink-0" />
