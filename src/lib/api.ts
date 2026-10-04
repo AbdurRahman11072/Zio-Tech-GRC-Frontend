@@ -7,6 +7,14 @@ export interface UserProfile {
   email: string;
   role: "admin" | "auditor" | "auditee" | "company_user";
   companyId?: string | null;
+  company?: {
+    id: string;
+    name: string;
+    subscriptionPlan: "none" | "starter" | "professional" | "enterprise";
+    subscriptionStatus: "inactive" | "active" | "trial" | "past_due" | "cancelled";
+    subscriptionExpiresAt?: string | null;
+    maxAudits: number;
+  } | null;
   createdAt: string;
 }
 
@@ -78,6 +86,8 @@ export async function registerUser(payload: {
   email: string;
   password: string;
   role?: string;
+  companyId?: string;
+  companyName?: string;
 }): Promise<AuthResponse> {
   const res = await fetch(`${API_URL}/auth/register`, {
     method: "POST",
@@ -124,6 +134,10 @@ export interface Company {
   address?: string | null;
   contactEmail?: string | null;
   contactPhone?: string | null;
+  subscriptionPlan?: "none" | "starter" | "professional" | "enterprise";
+  subscriptionStatus?: "inactive" | "active" | "trial" | "past_due" | "cancelled";
+  subscriptionExpiresAt?: string | null;
+  maxAudits?: number;
   users?: UserProfile[];
   createdAt: string;
   updatedAt: string;
@@ -203,6 +217,34 @@ export async function updateCompany(
     const errorMsg = Array.isArray(data.message)
       ? data.message.join(", ")
       : data.message || "Failed to update company";
+    throw new Error(errorMsg);
+  }
+  return data;
+}
+
+export async function updateCompanySubscription(
+  token: string,
+  companyId: string,
+  payload: {
+    plan: "none" | "starter" | "professional" | "enterprise";
+    status: "inactive" | "active" | "trial" | "past_due" | "cancelled";
+    maxAudits?: number;
+    expiresAt?: string;
+  },
+): Promise<Company> {
+  const res = await fetch(`${API_URL}/companies/${companyId}/subscription`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(data.message)
+      ? data.message.join(", ")
+      : data.message || "Failed to update subscription";
     throw new Error(errorMsg);
   }
   return data;

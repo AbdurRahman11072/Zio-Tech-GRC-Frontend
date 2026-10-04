@@ -20,6 +20,7 @@ import {
   FileCode,
 } from "lucide-react";
 import { useAuth } from "@/context/authContext";
+import SubscriptionModal from "@/components/subscription/subscriptionModal";
 import {
   fetchAudits,
   createAudit,
@@ -113,7 +114,36 @@ export default function AuditProjects({ onNavigateToTor }: AuditProjectsProps = 
   const [scope, setScope] = useState("");
   const [targetDate, setTargetDate] = useState("");
 
-  const canCreate = user?.role === "admin" || user?.role === "auditor";
+  const canCreate = user?.role === "admin" || user?.role === "auditor" || user?.role === "company_user";
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
+  const [subscriptionTarget, setSubscriptionTarget] = useState<{
+    id: string;
+    name: string;
+    plan?: any;
+    status?: any;
+  } | null>(null);
+
+  const handleOpenCreateModal = () => {
+    // If company user, verify their organization subscription
+    if (user?.role === "company_user") {
+      const userCompany = user.company;
+      if (
+        !userCompany ||
+        (userCompany.subscriptionStatus !== "active" &&
+          userCompany.subscriptionStatus !== "trial")
+      ) {
+        setSubscriptionTarget({
+          id: user.companyId || userCompany?.id || "",
+          name: userCompany?.name || "Your Organization",
+          plan: userCompany?.subscriptionPlan || "none",
+          status: userCompany?.subscriptionStatus || "inactive",
+        });
+        setIsSubscriptionModalOpen(true);
+        return;
+      }
+    }
+    setIsModalOpen(true);
+  };
 
   const loadData = async () => {
     if (!token) return;
@@ -172,9 +202,20 @@ export default function AuditProjects({ onNavigateToTor }: AuditProjectsProps = 
       setScope("");
       setTargetDate("");
     } catch (err: unknown) {
-      setFormError(
-        err instanceof Error ? err.message : "Failed to create audit project",
-      );
+      const msg = err instanceof Error ? err.message : "Failed to create audit project";
+      setFormError(msg);
+      if (msg.toLowerCase().includes("subscription")) {
+        const targetComp = companies.find((c) => c.id === companyId) || user?.company;
+        if (targetComp) {
+          setSubscriptionTarget({
+            id: targetComp.id,
+            name: targetComp.name,
+            plan: targetComp.subscriptionPlan,
+            status: targetComp.subscriptionStatus,
+          });
+          setIsSubscriptionModalOpen(true);
+        }
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -236,7 +277,7 @@ export default function AuditProjects({ onNavigateToTor }: AuditProjectsProps = 
         {canCreate && (
           <button
             type="button"
-            onClick={() => setIsModalOpen(true)}
+            onClick={handleOpenCreateModal}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs sm:text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
           >
             <Plus className="h-4 w-4" />
@@ -657,6 +698,25 @@ export default function AuditProjects({ onNavigateToTor }: AuditProjectsProps = 
             </form>
           </div>
         </div>
+      )}
+
+      {/* Subscription Gating Modal */}
+      {token && subscriptionTarget && (
+        <SubscriptionModal
+          isOpen={isSubscriptionModalOpen}
+          onClose={() => setIsSubscriptionModalOpen(false)}
+          token={token}
+          companyId={subscriptionTarget.id}
+          companyName={subscriptionTarget.name}
+          currentPlan={subscriptionTarget.plan || "none"}
+          currentStatus={subscriptionTarget.status || "inactive"}
+          reasonMessage="An active subscription plan is required to initiate audits for this organization. Upgrade below to immediately unlock audit creation."
+          onSubscriptionUpdated={() => {
+            loadData();
+            setIsSubscriptionModalOpen(false);
+            setIsModalOpen(true);
+          }}
+        />
       )}
     </div>
   );

@@ -26,7 +26,10 @@ interface AuthContextType {
     email: string;
     password: string;
     role?: string;
+    companyId?: string;
+    companyName?: string;
   }) => Promise<void>;
+  refreshProfile: () => Promise<void>;
   logout: () => void;
 }
 
@@ -73,10 +76,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     email: string;
     password: string;
     role?: string;
+    companyId?: string;
+    companyName?: string;
   }) => {
     const response = await registerUser(payload);
     setToken(response.accessToken);
     setUser(response.user);
+  };
+
+  const refreshProfile = async () => {
+    const activeToken = token || authStorage.getToken();
+    if (!activeToken) return;
+    try {
+      const freshUser = await fetchUserProfile(activeToken);
+      setUser(freshUser);
+      authStorage.setUser(freshUser);
+    } catch (err) {
+      console.error("Failed to refresh profile:", err);
+    }
   };
 
   const logout = () => {
@@ -94,6 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         login,
         register,
+        refreshProfile,
         logout,
       }}
     >

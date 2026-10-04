@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { Eye, EyeOff, LockKeyhole, Mail, User, Loader2, AlertCircle, Shield } from "lucide-react";
+import { Eye, EyeOff, LockKeyhole, Mail, User, Loader2, AlertCircle, Shield, Building2 } from "lucide-react";
 import AuthSocial from "./authSocial";
 import { useAuth } from "@/context/authContext";
 
@@ -15,6 +15,7 @@ export default function AuthRegister({ isActive, onSwitchToSignIn }: AuthRegiste
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [role, setRole] = useState("company_user");
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -26,7 +27,13 @@ export default function AuthRegister({ isActive, onSwitchToSignIn }: AuthRegiste
     setIsSubmitting(true);
 
     try {
-      await register({ name, email, password, role });
+      await register({
+        name,
+        email,
+        password,
+        role,
+        companyName: companyName.trim() || undefined,
+      });
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : "Failed to register");
     } finally {
@@ -85,6 +92,20 @@ export default function AuthRegister({ isActive, onSwitchToSignIn }: AuthRegiste
           autoComplete="email"
           required
           aria-label="Email"
+          disabled={isSubmitting}
+          className="w-full bg-transparent px-3 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none disabled:opacity-60"
+        />
+      </div>
+
+      {/* Organization / Company Field */}
+      <div className="group relative mb-2.5 flex h-12 w-full max-w-[360px] items-center rounded-full bg-slate-100 px-4 transition-all duration-200 border border-transparent focus-within:border-indigo-500 focus-within:bg-white focus-within:ring-4 focus-within:ring-indigo-100">
+        <Building2 className="h-4 w-4 shrink-0 text-slate-400 group-focus-within:text-indigo-600 transition-colors" />
+        <input
+          type="text"
+          value={companyName}
+          onChange={(e) => setCompanyName(e.target.value)}
+          placeholder="Organization / Company name"
+          aria-label="Organization name"
           disabled={isSubmitting}
           className="w-full bg-transparent px-3 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none disabled:opacity-60"
         />

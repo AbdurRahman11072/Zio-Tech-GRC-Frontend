@@ -21,6 +21,7 @@ import {
   RefreshCw,
   ChevronRight,
   Sparkles,
+  Zap,
 } from "lucide-react";
 import {
   SidebarProvider,
@@ -36,6 +37,7 @@ import DrtManagement from "@/components/drt/drtManagement";
 import AddGuidelineModal from "@/components/forms/addGuidelineModal";
 import AddTorModal from "@/components/forms/addTorModal";
 import AddDrtModal from "@/components/forms/addDrtModal";
+import SubscriptionModal from "@/components/subscription/subscriptionModal";
 import {
   fetchAudits,
   fetchAllTorClauses,
@@ -46,11 +48,12 @@ import {
 } from "@/lib/api";
 
 export default function UserDashboard() {
-  const { user, token } = useAuth();
+  const { user, token, refreshProfile } = useAuth();
   const [activeTab, setActiveTab] = useState<string>("Dashboard");
   const [selectedAuditIdForTor, setSelectedAuditIdForTor] = useState<
     string | undefined
   >(undefined);
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
 
   // Live Dashboard Data
   const [audits, setAudits] = useState<AuditProject[]>([]);
@@ -220,9 +223,34 @@ export default function UserDashboard() {
                 {activeTab}
               </h1>
             </div>
-            <div className="hidden sm:flex items-center gap-2 text-xs text-slate-600">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Connected to Neon DB (PostgreSQL)</span>
+            <div className="flex items-center gap-3">
+              {/* Organization Subscription Plan Badge */}
+              {user?.company && (
+                <button
+                  type="button"
+                  onClick={() => setIsSubscriptionModalOpen(true)}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border transition-all cursor-pointer shadow-xs ${
+                    user.company.subscriptionStatus === "active"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                      : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
+                  }`}
+                  title="Click to view and manage subscription plan"
+                >
+                  <Zap className="h-3 w-3" />
+                  <span>
+                    {user.company.name}:{" "}
+                    {user.company.subscriptionPlan
+                      ? user.company.subscriptionPlan.toUpperCase()
+                      : "FREE"}{" "}
+                    ({user.company.subscriptionStatus === "active" ? "Active" : "Locked"})
+                  </span>
+                </button>
+              )}
+
+              <div className="hidden sm:flex items-center gap-2 text-xs text-slate-600">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Connected to Neon DB (PostgreSQL)</span>
+              </div>
             </div>
           </div>
         </header>
@@ -919,6 +947,23 @@ export default function UserDashboard() {
           )}
         </main>
       </SidebarInset>
+
+      {/* Organization Subscription Management Modal */}
+      {token && user?.company && (
+        <SubscriptionModal
+          isOpen={isSubscriptionModalOpen}
+          onClose={() => setIsSubscriptionModalOpen(false)}
+          token={token}
+          companyId={user.company.id}
+          companyName={user.company.name}
+          currentPlan={user.company.subscriptionPlan || "none"}
+          currentStatus={user.company.subscriptionStatus || "inactive"}
+          onSubscriptionUpdated={() => {
+            refreshProfile();
+            loadDashboardData();
+          }}
+        />
+      )}
     </SidebarProvider>
   );
 }
