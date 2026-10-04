@@ -17,6 +17,9 @@ import {
   X,
   Building2,
   HelpCircle,
+  Send,
+  Mail,
+  BadgeCheck,
 } from "lucide-react";
 import { useAuth } from "@/context/authContext";
 import {
@@ -25,6 +28,7 @@ import {
   createTorClause,
   importTorTemplate,
   deleteTorClause,
+  finalizeAuditTor,
   type AuditProject,
   type TorClause,
 } from "@/lib/api";
@@ -44,6 +48,11 @@ export default function TorManagement({ initialAuditId }: TorManagementProps) {
   const [isTreeLoading, setIsTreeLoading] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Finalize TORs state
+  const [isFinalizeModalOpen, setIsFinalizeModalOpen] = useState(false);
+  const [isFinalizing, setIsFinalizing] = useState(false);
+  const [finalizeSuccessMessage, setFinalizeSuccessMessage] = useState<string | null>(null);
 
   // Expanded nodes set
   const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
@@ -212,6 +221,40 @@ export default function TorManagement({ initialAuditId }: TorManagementProps) {
     setIsModalOpen(true);
   };
 
+  const handleFinalizeTor = async () => {
+    if (!token || !selectedAuditId) return;
+    setIsFinalizing(true);
+    setError(null);
+    try {
+      const res = await finalizeAuditTor(token, selectedAuditId);
+      setFinalizeSuccessMessage(res.message);
+      setIsFinalizeModalOpen(false);
+      // Reload audits to reflect updated fieldwork status
+      const updatedAudits = await fetchAudits(token);
+      setAudits(updatedAudits);
+      setTimeout(() => setFinalizeSuccessMessage(null), 8000);
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Failed to finalize Terms of Reference",
+      );
+    } finally {
+      setIsFinalizing(false);
+    }
+  };
+
+  const countAllClauses = (nodes: TorClause[]): number => {
+    let count = 0;
+    for (const node of nodes) {
+      count += 1;
+      if (node.children && node.children.length > 0) {
+        count += countAllClauses(node.children);
+      }
+    }
+    return count;
+  };
+
   const selectedAudit = audits.find((a) => a.id === selectedAuditId);
 
   // Flatten for parent dropdown
@@ -314,6 +357,11 @@ export default function TorManagement({ initialAuditId }: TorManagementProps) {
     );
   };
 
+  const totalClauses = countAllClauses(tree);
+  const targetOrgEmail =
+    selectedAudit?.company?.contactEmail ||
+    `compliance@${selectedAudit?.company?.domain || "organization.com"}`;
+
   return (
     <div className="space-y-6">
       {/* Header and Project Selector */}
@@ -330,11 +378,42 @@ export default function TorManagement({ initialAuditId }: TorManagementProps) {
         <div className="flex flex-wrap items-center gap-2">
           {canEdit && (
             <>
+              {/* Finalize TORs Action Button */}
+              {selectedAudit && (
+                <button
+                  type="button"
+                  onClick={() => setIsFinalizeModalOpen(true)}
+                  disabled={isFinalizing || tree.length === 0}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold shadow-xs transition-colors cursor-pointer ${
+                    selectedAudit.status === "fieldwork"
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+                      : "bg-gradient-to-r from-indigo-600 to-indigo-700 text-white hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50"
+                  }`}
+                  title={
+                    selectedAudit.status === "fieldwork"
+                      ? "TORs are finalized and organization has been notified"
+                      : "Publish TORs and dispatch notification email to organization"
+                  }
+                >
+                  {selectedAudit.status === "fieldwork" ? (
+                    <>
+                      <BadgeCheck className="h-4 w-4 text-emerald-600" />
+                      <span>TORs Finalized (Fieldwork)</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-3.5 w-3.5" />
+                      <span>Finalize TORs & Notify Org</span>
+                    </>
+                  )}
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={handleImportTemplate}
                 disabled={isImporting || !selectedAuditId}
-                className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-xs font-semibold text-indigo-700 shadow-xs hover:bg-indigo-100 transition-colors disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3.5 py-2 text-xs font-semibold text-indigo-700 shadow-xs hover:bg-indigo-100 transition-colors disabled:opacity-60 cursor-pointer"
               >
                 {isImporting ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -352,7 +431,7 @@ export default function TorManagement({ initialAuditId }: TorManagementProps) {
                   setIsModalOpen(true);
                 }}
                 disabled={!selectedAuditId}
-                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 transition-colors disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 transition-colors disabled:opacity-60 cursor-pointer"
               >
                 <Plus className="h-4 w-4" />
                 <span>Add Root Clause</span>
@@ -361,6 +440,28 @@ export default function TorManagement({ initialAuditId }: TorManagementProps) {
           )}
         </div>
       </div>
+
+      {/* Success Notification Banner */}
+      {finalizeSuccessMessage && (
+        <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-xs sm:text-sm text-emerald-800 flex items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+            <div>
+              <p className="font-bold">Official Notification Dispatched!</p>
+              <p className="text-xs text-emerald-700 mt-0.5">
+                {finalizeSuccessMessage}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFinalizeSuccessMessage(null)}
+            className="text-emerald-600 hover:text-emerald-800 p-1 cursor-pointer"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Audit Selector & Scope Card */}
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
@@ -611,6 +712,101 @@ export default function TorManagement({ initialAuditId }: TorManagementProps) {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Finalize TORs & Notify Organization Modal */}
+      {isFinalizeModalOpen && selectedAudit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="relative w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-slate-100 p-6 my-8">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="h-10 w-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <Send className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Finalize Terms of Reference (TOR)
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Publish requirements & dispatch email alert to organization
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsFinalizeModalOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5 text-xs">
+                <div className="flex justify-between items-start border-b border-slate-200/80 pb-2">
+                  <span className="text-slate-500">Audit Project</span>
+                  <span className="font-bold text-slate-900 text-right">
+                    {selectedAudit.code} • {selectedAudit.title}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center border-b border-slate-200/80 pb-2">
+                  <span className="text-slate-500">Target Organization</span>
+                  <span className="font-semibold text-slate-800">
+                    {selectedAudit.company?.name || "Client Organization"}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center border-b border-slate-200/80 pb-2">
+                  <span className="text-slate-500">Recipient Email</span>
+                  <span className="font-mono font-semibold text-indigo-600">
+                    {targetOrgEmail}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-500">Configured Clauses</span>
+                  <span className="font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded text-[11px]">
+                    {totalClauses} Clauses
+                  </span>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-200 text-amber-800 text-xs flex items-start gap-2.5">
+                <Mail className="h-4 w-4 shrink-0 text-amber-600 mt-0.5" />
+                <p className="leading-relaxed">
+                  Finalizing will officially lock initial authoring and transition the engagement to <strong>Fieldwork (Evidence Collection)</strong>. An automated notification and email will be immediately dispatched to <strong>{targetOrgEmail}</strong> requesting document uploads.
+                </p>
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsFinalizeModalOpen(false)}
+                  disabled={isFinalizing}
+                  className="rounded-xl px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isFinalizing || totalClauses === 0}
+                  onClick={handleFinalizeTor}
+                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 transition-colors disabled:opacity-60 cursor-pointer"
+                >
+                  {isFinalizing ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <span>Dispatching Notification...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="h-3.5 w-3.5" />
+                      <span>Confirm & Notify Organization</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

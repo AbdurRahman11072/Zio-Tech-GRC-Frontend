@@ -39,6 +39,7 @@ import AddTorModal from "@/components/forms/addTorModal";
 import AddDrtModal from "@/components/forms/addDrtModal";
 import SubscriptionModal from "@/components/subscription/subscriptionModal";
 import GuidelineCategoriesManagement from "@/components/guidelines/guidelineCategoriesManagement";
+import NotificationBell from "@/components/notifications/notificationBell";
 import {
   fetchAudits,
   fetchAllTorClauses,
@@ -252,6 +253,9 @@ export default function UserDashboard() {
                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
                 <span>Connected to Neon DB (PostgreSQL)</span>
               </div>
+
+              {/* In-App Notifications & Alerts */}
+              <NotificationBell token={token} />
             </div>
           </div>
         </header>

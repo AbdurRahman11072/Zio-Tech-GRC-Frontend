@@ -710,6 +710,91 @@ export async function deleteTorClause(
   return data;
 }
 
+export async function finalizeAuditTor(
+  token: string,
+  auditId: string,
+): Promise<{
+  message: string;
+  audit: AuditProject;
+  clauseCount: number;
+  recipientEmail: string;
+  notificationId: string;
+}> {
+  const res = await fetch(`${API_URL}/audits/${auditId}/tor/finalize`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(data.message)
+      ? data.message.join(", ")
+      : data.message || "Failed to finalize Terms of Reference";
+    throw new Error(errorMsg);
+  }
+  return data;
+}
+
+export interface AppNotification {
+  id: string;
+  recipientEmail: string;
+  recipientUserId?: string | null;
+  companyId?: string | null;
+  auditProjectId?: string | null;
+  title: string;
+  message: string;
+  type:
+    | "TOR_FINALIZED_UPLOAD_REQUIRED"
+    | "EVIDENCE_UPLOADED_REVIEW_REQUIRED"
+    | "TASK_ASSIGNED"
+    | "GENERAL";
+  metadata?: Record<string, any> | null;
+  isRead: boolean;
+  emailSent: boolean;
+  createdAt: string;
+}
+
+export async function fetchNotifications(
+  token: string,
+): Promise<AppNotification[]> {
+  const res = await fetch(`${API_URL}/notifications`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to fetch notifications");
+  }
+  return data;
+}
+
+export async function markNotificationRead(
+  token: string,
+  id: string,
+): Promise<AppNotification> {
+  const res = await fetch(`${API_URL}/notifications/${id}/read`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to mark notification as read");
+  }
+  return data;
+}
+
+export async function markAllNotificationsRead(
+  token: string,
+): Promise<{ count: number }> {
+  const res = await fetch(`${API_URL}/notifications/read-all`, {
+    method: "PATCH",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to mark all notifications as read");
+  }
+  return data;
+}
+
 export type DrtRequirementStatus =
   | "pending"
   | "submitted"
