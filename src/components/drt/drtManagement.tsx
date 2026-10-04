@@ -28,6 +28,8 @@ import {
   UserCheck,
   Sparkles,
   RefreshCw,
+  Users,
+  Award,
 } from "lucide-react";
 import { useAuth } from "@/context/authContext";
 import {
@@ -42,6 +44,7 @@ import {
   fetchAuditDrtProgress,
   syncAuditTorToDrt,
   submitAllDrtEvidence,
+  completeAuditProject,
   type AuditProject,
   type DrtRequirement,
   type DrtRequirementStatus,
@@ -49,6 +52,7 @@ import {
   type TorClause,
   type DrtProgressSummary,
 } from "@/lib/api";
+import TaskDistributionModal from "../audits/taskDistributionModal";
 
 const statusConfig: Record<
   DrtRequirementStatus,
@@ -128,11 +132,18 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
   const [reviewComment, setReviewComment] = useState("");
   const [isReviewing, setIsReviewing] = useState(false);
 
-  // Phase 5: Submit All Evidence & Sync State
+  // Submit All Evidence & Sync State (Phase 5)
   const [isSyncingTor, setIsSyncingTor] = useState(false);
   const [isSubmitAllModalOpen, setIsSubmitAllModalOpen] = useState(false);
   const [isSubmittingAll, setIsSubmittingAll] = useState(false);
   const [submitAllSuccessMessage, setSubmitAllSuccessMessage] = useState<
+    string | null
+  >(null);
+
+  // Task Distribution & Closure State (Phase 6)
+  const [isDistributionModalOpen, setIsDistributionModalOpen] = useState(false);
+  const [isCompletingAudit, setIsCompletingAudit] = useState(false);
+  const [completionSuccessMessage, setCompletionSuccessMessage] = useState<
     string | null
   >(null);
 
@@ -379,12 +390,43 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
     }
   };
 
+  const handleCompleteAudit = async () => {
+    if (!token || !selectedAuditId) return;
+    if (
+      !confirm(
+        `Are you sure you want to mark audit "${currentAudit?.code}" as COMPLETED and issue final certification?`,
+      )
+    ) {
+      return;
+    }
+
+    setIsCompletingAudit(true);
+    try {
+      const res = await completeAuditProject(token, selectedAuditId);
+      setCompletionSuccessMessage(res.message);
+      const updatedAudits = await fetchAudits(token);
+      setAudits(updatedAudits);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to complete audit");
+    } finally {
+      setIsCompletingAudit(false);
+    }
+  };
+
   const filteredRequirements = requirements.filter((req) => {
     const matchesSearch =
       req.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
       req.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (req.torClause?.title &&
-        req.torClause.title.toLowerCase().includes(searchQuery.toLowerCase()));
+        req.torClause.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (req.assignedAuditee?.name &&
+        req.assignedAuditee.name
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()));
+
+    if (statusFilter === "assigned_to_me") {
+      return matchesSearch && req.assignedAuditeeId === user?.id;
+    }
 
     const matchesStatus =
       statusFilter === "all" || req.status === statusFilter;
@@ -408,6 +450,10 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
     progress?.completionPercentage ??
     (totalCount > 0 ? Math.round(((totalCount - pendingCount) / totalCount) * 100) : 0);
 
+  const assignedToMeCount = requirements.filter(
+    (r) => r.assignedAuditeeId === user?.id,
+  ).length;
+
   return (
     <div className="space-y-6">
       {/* Top Header Bar */}
@@ -415,7 +461,7 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="rounded-md bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-[11px] font-bold text-indigo-700 tracking-wider uppercase">
-              Phase 5: Evidence Vault
+              Phase 6: Verification & Task Division
             </span>
             {currentAudit?.status && (
               <span className="rounded-md bg-slate-100 border border-slate-200 px-2 py-0.5 text-[11px] font-bold text-slate-700 uppercase">
@@ -427,18 +473,18 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
             Document Requirement Tracking (DRT)
           </h2>
           <p className="text-xs sm:text-sm text-slate-500">
-            Upload compliance documents against TOR requirements, track completion, and notify the Lead Auditor.
+            Task distribution, auditee review queue, remark revisions, and final audit sign-off.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
           {/* Audit Selector */}
           <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-3 py-1.5 shadow-xs">
             <Building2 className="h-4 w-4 text-slate-400" />
             <select
               value={selectedAuditId}
               onChange={(e) => setSelectedAuditId(e.target.value)}
-              className="text-xs font-semibold text-slate-800 bg-transparent outline-none cursor-pointer max-w-[220px] truncate"
+              className="text-xs font-semibold text-slate-800 bg-transparent outline-none cursor-pointer max-w-[200px] truncate"
             >
               {audits.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -447,6 +493,19 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
               ))}
             </select>
           </div>
+
+          {/* Phase 6 Auditor Task Division Button */}
+          {isAuditorOrAdmin && currentAudit && (
+            <button
+              type="button"
+              onClick={() => setIsDistributionModalOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition-colors shadow-2xs"
+              title="Divide TOR verification tasks among team auditees"
+            >
+              <Users className="h-3.5 w-3.5" />
+              <span>Distribute Tasks</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -458,7 +517,7 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
             <RefreshCw
               className={`h-3.5 w-3.5 text-slate-500 ${isSyncingTor ? "animate-spin" : ""}`}
             />
-            <span className="hidden sm:inline">Sync from TOR</span>
+            <span className="hidden sm:inline">Sync TOR</span>
           </button>
 
           {isAuditorOrAdmin && (
@@ -474,7 +533,28 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
         </div>
       </div>
 
-      {/* Success Alert Banner */}
+      {/* Completion Banner */}
+      {completionSuccessMessage && (
+        <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 shadow-xs flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <CheckCircle2 className="h-6 w-6 text-emerald-600 shrink-0" />
+            <div>
+              <h4 className="text-sm font-bold text-emerald-950">
+                Audit Successfully Closed & Certified!
+              </h4>
+              <p className="text-xs text-emerald-800">{completionSuccessMessage}</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setCompletionSuccessMessage(null)}
+            className="text-emerald-700 hover:text-emerald-900 p-1"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Success Alert Banner for Submit All */}
       {submitAllSuccessMessage && (
         <div className="rounded-2xl border border-emerald-200 bg-gradient-to-r from-emerald-50 to-teal-50 p-4 shadow-xs flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
@@ -499,7 +579,44 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
         </div>
       )}
 
-      {/* Phase 5 Evidence Submission Command Center */}
+      {/* 100% Verified Sign-Off Callout Banner */}
+      {approvedCount === totalCount && totalCount > 0 && (
+        <div className="rounded-3xl border border-emerald-300 bg-gradient-to-r from-emerald-600 to-teal-600 p-5 text-white shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="h-12 w-12 rounded-2xl bg-white/20 flex items-center justify-center shrink-0 shadow-inner">
+              <Award className="h-7 w-7 text-white" />
+            </div>
+            <div>
+              <span className="text-[10px] font-extrabold uppercase tracking-widest bg-white/25 px-2 py-0.5 rounded-full">
+                Audit Sign-Off Ready
+              </span>
+              <h4 className="text-base sm:text-lg font-extrabold mt-0.5">
+                100% Verification Complete ({approvedCount}/{totalCount} Items Approved)
+              </h4>
+              <p className="text-xs text-emerald-100">
+                All TOR evidence requirements have been verified and approved by the assigned reviewers.
+              </p>
+            </div>
+          </div>
+
+          {isAuditorOrAdmin && currentAudit?.status !== "completed" && (
+            <button
+              onClick={handleCompleteAudit}
+              disabled={isCompletingAudit}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3 text-xs sm:text-sm font-extrabold text-emerald-800 shadow-md hover:bg-emerald-50 transition-all shrink-0 hover:scale-[1.02]"
+            >
+              {isCompletingAudit ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              )}
+              <span>Complete & Certify Audit</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Evidence Submission Command Center */}
       <div className="rounded-3xl border border-slate-200 bg-white p-5 sm:p-6 shadow-xs relative overflow-hidden">
         <div className="absolute top-0 right-0 -mt-10 -mr-10 h-40 w-40 bg-indigo-100/50 rounded-full blur-2xl pointer-events-none" />
 
@@ -507,16 +624,18 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
           <div className="space-y-2 flex-1">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Evidence Collection Progress
+                Evidence Collection & Verification Status
               </span>
               <span
                 className={`px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider rounded-md border ${
-                  uploadPct === 100
+                  complianceRate === 100
                     ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                     : "bg-blue-50 text-blue-700 border-blue-200"
                 }`}
               >
-                {uploadPct === 100 ? "100% Uploaded" : `${uploadPct}% Completed`}
+                {complianceRate === 100
+                  ? "100% Verified"
+                  : `${complianceRate}% Compliance Rate`}
               </span>
             </div>
 
@@ -533,7 +652,7 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
             <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200/70">
               <div
                 className={`h-full transition-all duration-700 ${
-                  uploadPct === 100
+                  complianceRate === 100
                     ? "bg-gradient-to-r from-emerald-500 to-teal-500"
                     : "bg-gradient-to-r from-indigo-500 to-blue-500"
                 }`}
@@ -542,14 +661,16 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
             </div>
 
             <p className="text-xs text-slate-500">
-              {uploadPct === 100 ? (
+              {complianceRate === 100 ? (
                 <span className="text-emerald-700 font-medium flex items-center gap-1.5">
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  All required TOR documents have been uploaded and are ready for Auditor verification.
+                  All requirements verified and approved. Audit is ready for final closure.
                 </span>
               ) : (
                 <span>
-                  <strong>{pendingCount}</strong> requirement(s) are awaiting evidence upload before final auditor review handoff.
+                  <strong>{approvedCount}</strong> verified,{" "}
+                  <strong>{submittedCount}</strong> under review,{" "}
+                  <strong>{revisionCount}</strong> revisions requested.
                 </span>
               )}
             </p>
@@ -596,7 +717,7 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
               } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               <Send className="h-4 w-4" />
-              <span>Submit All Evidence to Auditor</span>
+              <span>Submit All Evidence</span>
             </button>
           </div>
         </div>
@@ -653,7 +774,7 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
           <input
             type="text"
-            placeholder="Search DRT code, title, or clause..."
+            placeholder="Search code, title, clause, or reviewer..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -664,6 +785,7 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
           <Filter className="h-4 w-4 text-slate-400 shrink-0" />
           {[
             { id: "all", label: `All (${totalCount})` },
+            { id: "assigned_to_me", label: `My Tasks (${assignedToMeCount})` },
             { id: "pending", label: `Pending (${pendingCount})` },
             { id: "submitted", label: `Uploaded (${submittedCount})` },
             { id: "approved", label: `Verified (${approvedCount})` },
@@ -704,9 +826,9 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
             No DRT Requirements Found
           </h3>
           <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-4">
-            {searchQuery
-              ? "No requirements match your search filter."
-              : "Sync leaf clauses from finalized Terms of Reference (TOR) or create custom evidence deliverables."}
+            {searchQuery || statusFilter !== "all"
+              ? "No requirements match your current search or filter."
+              : "Sync leaf clauses from finalized Terms of Reference (TOR) or create custom deliverables."}
           </p>
           <div className="flex items-center justify-center gap-3">
             <button
@@ -719,15 +841,6 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
               />
               <span>Sync from TOR Clauses</span>
             </button>
-            {isAuditorOrAdmin && (
-              <button
-                onClick={() => setIsAddModalOpen(true)}
-                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                <Plus className="h-4 w-4" />
-                <span>Create Custom Item</span>
-              </button>
-            )}
           </div>
         </div>
       ) : (
@@ -747,6 +860,8 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
             const hasUploadedFiles =
               latestSub?.evidenceFiles && latestSub.evidenceFiles.length > 0;
 
+            const canReview = isAuditorOrAdmin || user?.role === "auditee";
+
             return (
               <div
                 key={req.id}
@@ -763,6 +878,18 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
                       <span className="inline-flex items-center gap-1 rounded-md bg-purple-50 px-2.5 py-0.5 text-[11px] font-semibold text-purple-700 border border-purple-200">
                         <ShieldCheck className="h-3 w-3" />
                         <span>Clause {req.torClause.clauseNumber}: {req.torClause.title}</span>
+                      </span>
+                    )}
+
+                    {/* Assigned Auditee Pill */}
+                    {req.assignedAuditee ? (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
+                        <UserCheck className="h-3 w-3" />
+                        <span>Assigned: {req.assignedAuditee.name}</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-slate-100 border border-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                        <span>Unassigned Reviewer</span>
                       </span>
                     )}
 
@@ -878,7 +1005,7 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
                         <div>
                           <div className="font-bold flex items-center gap-2 mb-0.5">
                             <span>
-                              Auditor Finding ({latestRemark.reviewer?.name || "Lead Auditor"})
+                              Reviewer Remark ({latestRemark.reviewer?.name || "Reviewer"})
                             </span>
                             <span className="text-[10px] uppercase tracking-wider font-extrabold px-1.5 py-0.2 rounded bg-white/60">
                               {latestRemark.decision.replace("_", " ")}
@@ -917,7 +1044,8 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
                     </span>
                   </button>
 
-                  {isAuditorOrAdmin && latestSub && (
+                  {/* Phase 6 Auditee / Auditor Review Action */}
+                  {canReview && latestSub && (
                     <button
                       type="button"
                       onClick={() => {
@@ -938,7 +1066,25 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
         </div>
       )}
 
-      {/* 1. Modal: Submit All Evidence & Notify Auditor (Phase 5) */}
+      {/* 1. Modal: Phase 6 Task Distribution */}
+      {isDistributionModalOpen && currentAudit && (
+        <TaskDistributionModal
+          isOpen={isDistributionModalOpen}
+          onClose={() => setIsDistributionModalOpen(false)}
+          audit={currentAudit}
+          requirements={requirements}
+          onSuccess={async () => {
+            const [updatedReqs, updatedProgress] = await Promise.all([
+              fetchAuditDrtRequirements(token!, selectedAuditId),
+              fetchAuditDrtProgress(token!, selectedAuditId).catch(() => null),
+            ]);
+            setRequirements(updatedReqs);
+            if (updatedProgress) setProgress(updatedProgress);
+          }}
+        />
+      )}
+
+      {/* 2. Modal: Submit All Evidence & Notify Auditor */}
       {isSubmitAllModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
@@ -993,7 +1139,7 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
                           .join("")
                           .toUpperCase()
                           .slice(0, 2)
-                      : "AU"}
+                    : "AU"}
                   </div>
                   <div>
                     <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">
@@ -1009,7 +1155,6 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
                 </div>
               </div>
 
-              {/* Incomplete Warning if not 100% */}
               {uploadPct < 100 && (
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 flex items-start gap-2">
                   <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
@@ -1053,7 +1198,7 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
         </div>
       )}
 
-      {/* 2. Modal: Submit / Upload Evidence */}
+      {/* 3. Modal: Submit / Upload Evidence */}
       {evidenceTargetReq && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
@@ -1075,7 +1220,6 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
             </div>
 
             <form onSubmit={handleSubmitEvidence} className="space-y-4">
-              {/* File Dropzone */}
               <div
                 onClick={() => fileInputRef.current?.click()}
                 className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-indigo-200 rounded-2xl bg-indigo-50/30 hover:bg-indigo-50/60 cursor-pointer transition-colors text-center"
@@ -1096,7 +1240,6 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
                 />
               </div>
 
-              {/* Selected Files Preview */}
               {selectedFiles.length > 0 && (
                 <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
                   <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
@@ -1126,7 +1269,6 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
                 </div>
               )}
 
-              {/* Notes Field */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Submission Notes & Context
@@ -1162,14 +1304,14 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
         </div>
       )}
 
-      {/* 3. Modal: Review & Sign-Off (Auditor) */}
+      {/* 4. Modal: Review & Sign-Off (Auditor / Auditee) */}
       {reviewTargetReq && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
               <div>
                 <h3 className="text-lg font-bold text-slate-900">
-                  Auditor Evaluation & Sign-Off
+                  Verification Evaluation & Sign-Off
                 </h3>
                 <p className="text-xs text-slate-500">
                   Requirement: <strong>{reviewTargetReq.code}</strong> — {reviewTargetReq.title}
@@ -1219,7 +1361,7 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Auditor Findings & Remark <span className="text-rose-500">*</span>
+                  Reviewer Finding & Remark <span className="text-rose-500">*</span>
                 </label>
                 <textarea
                   rows={4}
@@ -1253,7 +1395,7 @@ export default function DrtManagement({ initialAuditId }: DrtManagementProps) {
         </div>
       )}
 
-      {/* 4. Modal: Add DRT Requirement */}
+      {/* 5. Modal: Add DRT Requirement */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto">
           <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">

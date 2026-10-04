@@ -864,6 +864,12 @@ export interface DrtRequirement {
     clauseNumber: string;
     title: string;
   };
+  assignedAuditeeId?: string | null;
+  assignedAuditee?: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
   submissions: DrtSubmission[];
   createdAt: string;
   updatedAt: string;
@@ -1085,5 +1091,53 @@ export async function submitAllDrtEvidence(
   return data;
 }
 
+export async function distributeAuditTasks(
+  token: string,
+  auditId: string,
+  assignments: { requirementId: string; auditeeId: string | null }[],
+): Promise<{
+  message: string;
+  updatedCount: number;
+  assignedAuditeeCount: number;
+}> {
+  const res = await fetch(`${API_URL}/audits/${auditId}/distribute-tasks`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ assignments }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(data.message)
+      ? data.message.join(", ")
+      : data.message || "Failed to distribute tasks";
+    throw new Error(errorMsg);
+  }
+  return data;
+}
 
-
+export async function completeAuditProject(
+  token: string,
+  auditId: string,
+): Promise<{
+  message: string;
+  audit: AuditProject;
+}> {
+  const res = await fetch(`${API_URL}/audits/${auditId}/complete`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(data.message)
+      ? data.message.join(", ")
+      : data.message || "Failed to complete audit project";
+    throw new Error(errorMsg);
+  }
+  return data;
+}
