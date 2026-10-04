@@ -1012,5 +1012,78 @@ export function getEvidenceDownloadUrl(fileId: string): string {
   return `${API_URL}/evidence/${fileId}/download`;
 }
 
+export interface DrtProgressSummary {
+  auditId: string;
+  auditCode: string;
+  auditTitle: string;
+  auditStatus: string;
+  totalRequirements: number;
+  uploadedRequirements: number;
+  pendingRequirements: number;
+  approvedRequirements: number;
+  revisionRequiredRequirements: number;
+  completionPercentage: number;
+  isAllUploaded: boolean;
+  leadAuditor: { id: string; name: string; email: string } | null;
+}
+
+export async function fetchAuditDrtProgress(
+  token: string,
+  auditId: string,
+): Promise<DrtProgressSummary> {
+  const res = await fetch(`${API_URL}/audits/${auditId}/drt/progress`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to fetch DRT progress");
+  }
+  return data;
+}
+
+export async function syncAuditTorToDrt(
+  token: string,
+  auditId: string,
+): Promise<DrtRequirement[]> {
+  const res = await fetch(`${API_URL}/audits/${auditId}/drt/sync-tor`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    throw new Error(data.message || "Failed to sync TOR clauses to DRT");
+  }
+  return data;
+}
+
+export async function submitAllDrtEvidence(
+  token: string,
+  auditId: string,
+): Promise<{
+  message: string;
+  notificationId?: string;
+  recipientEmail: string;
+  progress: DrtProgressSummary;
+}> {
+  const res = await fetch(`${API_URL}/audits/${auditId}/drt/submit-all`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(data.message)
+      ? data.message.join(", ")
+      : data.message || "Failed to submit all evidence";
+    throw new Error(errorMsg);
+  }
+  return data;
+}
+
 
 
